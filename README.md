@@ -43,7 +43,7 @@ shopping-app/
 │   ├── routes/
 │   │   ├── __init__.py
 │   │   ├── auth.py             # Logowanie/rejestracja
-	│   │   ├── shopping.py         # Listy zakupów
+│   │   ├── shopping.py         # Listy zakupów
 │   │   ├── ocr.py              # Skanowanie paragonów
 │   │   ├── settlements.py      # Rozliczenia
 │   │   └── notifications.py    # Powiadomienia
@@ -52,7 +52,6 @@ shopping-app/
 │   │   ├── ocr_service.py      # Logika OCR
 │   │   ├── settlement_service.py # Algorytmy rozliczeń
 │   │   ├── notification_service.py # Email/SMS
-│   │   └── payment_service.py  # Integracja płatności
 │   ├── templates/
 │   │   ├── base.html
 │   │   ├── auth/
@@ -71,6 +70,21 @@ shopping-app/
 └── run.py
 ```
 
+---
+### Osoby:
+- Issues
+	- Git
+- Martyna:
+	- Login i Rejestracja + interfejs i backend do upload plików + parada smoków 
+- Tymon
+	- Rozliczenia + Główna strona + Dodawanie list + listy (interfejs) + wykresy
+- Kiryl
+	- Powiadomienia Email + Backend(dodawanie list i zarządzanie list) + CSV eksport
+- Kacper
+	-  OCR + Modele Danych + Migracje Danych + Git
+- Dodatkowo:
+	- Interfejs użytkownika odzyskiwanie hasła
+	- Testy do każdego
 ---
 
 ## Plan implementacji (etap po etapie)
@@ -440,7 +454,7 @@ class OCRService:
 ___
 ## Możliwy podział zespołu
 
-###  **Backend + Logika rozliczeń** (Osoba 1)
+###  **Backend + Logika rozliczeń** 
 
 - Modele danych (User, ShoppingList, Product, Payment)
 - API REST dla wszystkich operacji CRUD
@@ -448,7 +462,7 @@ ___
 - System autoryzacji (sesje użytkowników)
 - Logika automatycznych przypomnień
 
-###  **Frontend + UX** (Osoba 2)
+###  **Frontend + UX** 
 
 - Responsive web interface (HTML, CSS, JavaScript)
 - Formularze (dodawanie list, produktów, użytkowników)
@@ -456,7 +470,7 @@ ___
 - Interfejs do przeglądania skanów paragonów
 - AJAX dla dynamicznych aktualizacji
 
-###  **OCR + Przetwarzanie obrazów** (Osoba 3)
+###  **OCR + Przetwarzanie obrazów** 
 
 - **Integracja Tesseract OCR**
 - Preprocessing obrazów (OpenCV)
@@ -464,10 +478,10 @@ ___
 - Upload i zarządzanie zdjęciami paragonów
 - Walidacja i korekta wyników OCR
 
-###  **Integracje + Powiadomienia** (Osoba 4)
+###  **Integracje + Powiadomienia** (Kiryl)
 
-- **System powiadomień** (email + SMS)
-- Integracja z API płatniczymi (Stripe/PayU/Revolut)
+- **System powiadomień** (email + SMT)
++
 - **Automatyczne przypomnienia** o płatnościach
-- Export danych (CSV, PDF)
-- Konfiguracja deployment
+- Export danych (CSV)
+
