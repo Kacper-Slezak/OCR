@@ -2,3 +2,4 @@
 app/static/uploads/
 .env
 migrations
+/app.db
