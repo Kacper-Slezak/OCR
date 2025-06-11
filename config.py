@@ -16,5 +16,6 @@ class Config:
     # Folder do uploads
     UPLOAD_FOLDER = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'app', 'static', 'uploads')
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # Limit rozmiaru pliku: 16 MB
+    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
     TESSERACT_PATH = os.environ.get('TESSERACT_PATH')

@@ -29,7 +29,7 @@ def create_app():
 
     # from .routes import auth # Martyna
     # from .routes import shopping # Tymon
-    # from .routes import ocr # Martyna/Kacper
+    from .routes import ocr # Martyna/Kacper
     # from .routes import settlements # Tymon
     # from .routes import notifications # Kiryl
 
