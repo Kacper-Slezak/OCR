@@ -25,7 +25,7 @@ class User(db.Model, UserMixin):
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
 
     # Relacje do innych modeli
     created_shopping_lists = db.relationship('ShoppingList', backref='creator', lazy='dynamic', foreign_keys='ShoppingList.created_by')
@@ -49,7 +49,7 @@ class ShoppingList(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
     is_completed = db.Column(db.Boolean, default=False)
 
     # Relacje
@@ -80,7 +80,7 @@ class Settlement(db.Model):
     creditor_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     amount = db.Column(db.Numeric(10, 2), nullable=False)
     is_settled = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
     settled_at = db.Column(db.DateTime, nullable=True) # Data uregulowania
 
     # Indeksy dla szybszych zapytań (opcjonalne, ale zalecane dla kluczy obcych)
@@ -97,7 +97,7 @@ class Receipt(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     file_path = db.Column(db.String(255), nullable=False)
-    upload_date = db.Column(db.DateTime, default=datetime.utcnow)
+    upload_date = db.Column(db.DateTime, default=datetime.now)
     status = db.Column(db.String(50), default='uploaded') # Status przetwarzania: 'uploaded', 'processing', 'processed', 'error'
     raw_text = db.Column(db.Text, nullable=True) # Surowy tekst z OCR
     processed_data = db.Column(db.Text, nullable=True) # Sparsowane dane w formacie JSON jako string
