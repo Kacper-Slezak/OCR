@@ -19,7 +19,7 @@ def allowed_file(filename):
 
 
 @bp.route('/upload', methods=['GET', 'POST'])
-#@login_required
+@login_required
 def upload_receipt():
     if request.method == 'POST':
         if 'file' not in request.files:
