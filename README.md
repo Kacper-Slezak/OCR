@@ -253,28 +253,31 @@ shopping-app/
 
 ### Konfiguracja środowiska:
 
-- [ ]  Stworzenie wirtualnego środowiska Python
-- [ ]  Instalacja Flask i podstawowych zależności
-- [ ]  Konfiguracja bazy danych SQLite
-- [ ]  Struktura katalogów projektu
-- [ ]  Inicjalizacja git repository
+- [x]  Stworzenie wirtualnego środowiska Python
+- [x]  Instalacja Flask i podstawowych zależności
+- [x]  Konfiguracja bazy danych SQLite
+- [x]  Struktura katalogów projektu
+- [x]  Inicjalizacja git repository
 
 ### Pierwszy milestone (Etap 1):
 	
-- [ ]  Model User + system autentykacji
+- [x]  Model User
+- [ ]  System autentykacji
 - [ ]  Template base.html z Bootstrap
 - [ ]  Formularze logowania/rejestracji
-- [ ]  Model ShoppingList + CRUD operations
-- [ ]  Model Product + podstawowe operacje
+- [x]  Model ShoppingList
+- [ ]  CRUD operations
+- [x]  Model Product
+- [ ]  Podstawowe operacje Produkt
 - [ ]  Dashboard użytkownika
 - [ ]  Testy podstawowej funkcjonalności
 
 ### Drugi milestone (Etap 2):
 
-- [ ]  Model Receipt + upload plików
-- [ ]  Integracja Tesseract OCR
-- [ ]  Preprocessing obrazów z OpenCV
-- [ ]  Parser tekstu paragonów
+- [x]  Model Receipt + upload plików
+- [x]  Integracja Tesseract OCR
+- [x]  Preprocessing obrazów z OpenCV
+- [x]  Parser tekstu paragonów
 - [ ]  UI dla uploadu paragonów
 - [ ]  System korekty wyników OCR
 

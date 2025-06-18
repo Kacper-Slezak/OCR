@@ -1,0 +1,4 @@
+
+app/static/uploads/
+.env
+/app.db

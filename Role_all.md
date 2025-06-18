@@ -137,62 +137,62 @@
     - [ ] Dbanie o aktualizację `requirements.txt` przy dodawaniu nowych zależności.
 ### Etap 1: Modele Danych + Migracje Danych
 - [ ] **Modele Danych (w `app/models.py`):**
-    - [ ] **Model `User` (Użytkownicy):**
-        - [ ] Zdefiniowanie pól: `id` (klucz główny, integer), `username` (string, unikalny, niepusty), `email` (string, unikalny, niepusty), `password_hash` (string, niepusty), `created_at` (datetime, domyślna wartość: aktualna data/czas UTC).
-        - [ ] Zapewnienie, że klasa `User` dziedziczy z `UserMixin` z Flask-Login.
-        - [ ] Dodanie metod `set_password(password)` i `check_password(password)` do hashowania/sprawdzania haseł z użyciem `bcrypt`.
-        - [ ] Zdefiniowanie relacji `one-to-many` do `ShoppingList` (jako twórca), `Product` (jako przypisany i płacący), `Settlement` (jako dłużnik i wierzyciel), `Receipt`.
-    - [ ] **Model `ShoppingList` (Lista zakupów):**
-        - [ ] Zdefiniowanie pól: `id` (klucz główny), `name` (string, niepusty), `created_by` (integer, klucz obcy do `User.id`), `created_at` (datetime, domyślna wartość), `is_completed` (boolean, domyślnie False).
-        - [ ] Zdefiniowanie relacji `one-to-many` do `Product` i `Settlement`.
-        - [ ] Zdefiniowanie relacji `many-to-many` z `User` dla uczestników listy (przez tabelę pośrednią `shopping_list_participants` - patrz niżej).
-    - [ ] **Model `Product` (Produkty na liście):**
-        - [ ] Zdefiniowanie pól: `id` (klucz główny), `name` (string, niepusty), `price` (Decimal(10, 2), niepusty), `shopping_list_id` (integer, klucz obcy do `ShoppingList.id`), `assigned_to` (integer, klucz obcy do `User.id`), `paid_by` (integer, klucz obcy do `User.id`), `is_purchased` (boolean, domyślnie False).
-        - [ ] Zdefiniowanie relacji `many-to-one` do `ShoppingList` i `User` (dla `assigned_to` i `paid_by`).
-    - [ ] **Model `Receipt` (Paragony):**
-        - [ ] Zdefiniowanie pól: `id` (klucz główny), `user_id` (integer, klucz obcy do `User.id`), `file_path` (string, niepusty), `upload_date` (datetime, domyślna wartość), `status` (string, np. 'uploaded', 'processing', 'processed', 'error'), `raw_text` (text, opcjonalnie - na wypadek przechowywania surowego tekstu z OCR), `processed_data` (JSON/Text, na wypadek przechowywania sparsowanych danych).
-        - [ ] Zdefiniowanie relacji `many-to-one` do `User`.
-        - [ ] Opcjonalnie: pole do relacji z `Product` jeśli produkty z paragonu mają być bezpośrednio powiązane z modelem `Product` (np. `receipt_id` w `Product`).
-    - [ ] **Model `Settlement` (Rozliczenia):**
-        - [ ] Zdefiniowanie pól: `id` (klucz główny), `shopping_list_id` (integer, klucz obcy do `ShoppingList.id`), `debtor_id` (integer, klucz obcy do `User.id`, kto jest winien), `creditor_id` (integer, klucz obcy do `User.id`, komu jest winien), `amount` (Decimal(10, 2), niepusty), `is_settled` (boolean, domyślnie False), `created_at` (datetime, domyślna wartość).
-        - [ ] Zdefiniowanie relacji `many-to-one` do `ShoppingList` oraz dwóch relacji `many-to-one` do `User` (dla dłużnika i wierzyciela).
-    - [ ] **Tabela pośrednia `shopping_list_participants` (dla relacji many-to-many):**
-        - [ ] Utworzenie tabeli asocjacyjnej dla relacji `many-to-many` między `User` a `ShoppingList` (uczestnicy listy).
-        - [ ] Zdefiniowanie pól: `user_id` (klucz obcy do `User.id`), `shopping_list_id` (klucz obcy do `ShoppingList.id`).
-        - [ ] Ustawienie obu pól jako klucza głównego tabeli.
-    - [ ] Dodanie **indeksów do pól kluczy obcych** dla optymalizacji zapytań (np. `db.Index('idx_shopping_list_id', Product.shopping_list_id)`).
+    - [x] **Model `User` (Użytkownicy):**
+        - [x] Zdefiniowanie pól: `id` (klucz główny, integer), `username` (string, unikalny, niepusty), `email` (string, unikalny, niepusty), `password_hash` (string, niepusty), `created_at` (datetime, domyślna wartość: aktualna data/czas UTC).
+        - [x] Zapewnienie, że klasa `User` dziedziczy z `UserMixin` z Flask-Login.
+        - [x] Dodanie metod `set_password(password)` i `check_password(password)` do hashowania/sprawdzania haseł z użyciem `bcrypt`.
+        - [x] Zdefiniowanie relacji `one-to-many` do `ShoppingList` (jako twórca), `Product` (jako przypisany i płacący), `Settlement` (jako dłużnik i wierzyciel), `Receipt`.
+    - [x] **Model `ShoppingList` (Lista zakupów):**
+        - [x] Zdefiniowanie pól: `id` (klucz główny), `name` (string, niepusty), `created_by` (integer, klucz obcy do `User.id`), `created_at` (datetime, domyślna wartość), `is_completed` (boolean, domyślnie False).
+        - [x] Zdefiniowanie relacji `one-to-many` do `Product` i `Settlement`.
+        - [x] Zdefiniowanie relacji `many-to-many` z `User` dla uczestników listy (przez tabelę pośrednią `shopping_list_participants` - patrz niżej).
+    - [x] **Model `Product` (Produkty na liście):**
+        - [x] Zdefiniowanie pól: `id` (klucz główny), `name` (string, niepusty), `price` (Decimal(10, 2), niepusty), `shopping_list_id` (integer, klucz obcy do `ShoppingList.id`), `assigned_to` (integer, klucz obcy do `User.id`), `paid_by` (integer, klucz obcy do `User.id`), `is_purchased` (boolean, domyślnie False).
+        - [x] Zdefiniowanie relacji `many-to-one` do `ShoppingList` i `User` (dla `assigned_to` i `paid_by`).
+    - [x] **Model `Receipt` (Paragony):**
+        - [x] Zdefiniowanie pól: `id` (klucz główny), `user_id` (integer, klucz obcy do `User.id`), `file_path` (string, niepusty), `upload_date` (datetime, domyślna wartość), `status` (string, np. 'uploaded', 'processing', 'processed', 'error'), `raw_text` (text, opcjonalnie - na wypadek przechowywania surowego tekstu z OCR), `processed_data` (JSON/Text, na wypadek przechowywania sparsowanych danych).
+        - [x] Zdefiniowanie relacji `many-to-one` do `User`.
+        - [x] Opcjonalnie: pole do relacji z `Product` jeśli produkty z paragonu mają być bezpośrednio powiązane z modelem `Product` (np. `receipt_id` w `Product`).
+    - [x] **Model `Settlement` (Rozliczenia):**
+        - [x] Zdefiniowanie pól: `id` (klucz główny), `shopping_list_id` (integer, klucz obcy do `ShoppingList.id`), `debtor_id` (integer, klucz obcy do `User.id`, kto jest winien), `creditor_id` (integer, klucz obcy do `User.id`, komu jest winien), `amount` (Decimal(10, 2), niepusty), `is_settled` (boolean, domyślnie False), `created_at` (datetime, domyślna wartość).
+        - [x] Zdefiniowanie relacji `many-to-one` do `ShoppingList` oraz dwóch relacji `many-to-one` do `User` (dla dłużnika i wierzyciela).
+    - [x] **Tabela pośrednia `shopping_list_participants` (dla relacji many-to-many):**
+        - [x] Utworzenie tabeli asocjacyjnej dla relacji `many-to-many` między `User` a `ShoppingList` (uczestnicy listy).
+        - [x] Zdefiniowanie pól: `user_id` (klucz obcy do `User.id`), `shopping_list_id` (klucz obcy do `ShoppingList.id`).
+        - [x] Ustawienie obu pól jako klucza głównego tabeli.
+    - [x] Dodanie **indeksów do pól kluczy obcych** dla optymalizacji zapytań (np. `db.Index('idx_shopping_list_id', Product.shopping_list_id)`).
 - [ ] **Migracje Danych (Flask-Migrate):**
-    - [ ] **Inicjalizacja migracji:** Jeśli jeszcze nie zrobiono, wykonanie `flask db init` w katalogu głównym projektu, aby utworzyć folder `migrations/`.
-    - [ ] **Tworzenie pierwszej migracji:** Po zdefiniowaniu wszystkich powyższych modeli, wykonanie `flask db migrate -m "Create all core tables"` w terminalu. To wygeneruje skrypt migracji w folderze `migrations/versions/`.
-    - [ ] **Przejrzenie i weryfikacja migracji:** Sprawdzenie wygenerowanego skryptu migracji, aby upewnić się, że poprawnie odzwierciedla definicje modeli (tworzenie tabel, pól, kluczy obcych, indeksów).
-    - [ ] **Zastosowanie migracji:** Wykonanie `flask db upgrade` w terminalu, aby utworzyć tabele w bazie danych (SQLite lub PostgreSQL).
+    - [x] **Inicjalizacja migracji:** Jeśli jeszcze nie zrobiono, wykonanie `flask db init` w katalogu głównym projektu, aby utworzyć folder `migrations/`.
+    - [x] **Tworzenie pierwszej migracji:** Po zdefiniowaniu wszystkich powyższych modeli, wykonanie `flask db migrate -m "Create all core tables"` w terminalu. To wygeneruje skrypt migracji w folderze `migrations/versions/`.
+    - [x] **Przejrzenie i weryfikacja migracji:** Sprawdzenie wygenerowanego skryptu migracji, aby upewnić się, że poprawnie odzwierciedla definicje modeli (tworzenie tabel, pól, kluczy obcych, indeksów).
+    - [x] **Zastosowanie migracji:** Wykonanie `flask db upgrade` w terminalu, aby utworzyć tabele w bazie danych (SQLite lub PostgreSQL).
     - [ ] **Obsługa zmian w modelach:** Przy każdej przyszłej zmianie w definicjach modeli (np. dodanie nowego pola, zmiana typu danych, dodanie nowego modelu), ponowne wykonanie `flask db migrate -m "Opis_zmiany"` i `flask db upgrade`.
     - [ ] **Testowanie migracji:** Upewnienie się, że migracje działają poprawnie zarówno przy `upgrade`, jak i (opcjonalnie) `downgrade`.
 ### Etap 2: OCR i skanowanie paragonów - Przetwarzanie i Parsing
 
-- [ ] **Preprocessing obrazów (OCR Service):**
-    - [ ] Utworzenie pliku `ocr_service.py` w `app/services/`.
-    - [ ] Zaimplementowanie funkcji `preprocess_image(image_path)` w `OCRService` z wykorzystaniem **OpenCV (`cv2`)** i **Pillow**.
-    - [ ] Kroki preprocessingowe:
-        - [ ] Wczytanie obrazu.
-        - [ ] Konwersja do skali szarości.
-        - [ ] Binaryzacja (np. Otsu's thresholding) lub adaptacyjne progowanie.
-        - [ ] Opcjonalnie: deskewing (prostowanie przekrzywionych obrazów), redukcja szumów.
-    - [ ] Zapisanie przetworzonego obrazu tymczasowo lub przekazanie go bezpośrednio do Tesseracta.
-- [ ] **Ekstrakcja tekstu (OCR Service):**
-    - [ ] Zaimplementowanie funkcji `extract_text(image_path)` w `OCRService`.
-    - [ ] Wykorzystanie **`pytesseract.image_to_string`** na przetworzonym obrazie.
-    - [ ] Określenie języka (`lang='pol'`) dla Tesseracta.
-- [ ] **Parser tekstu paragonów (OCR Service):**
-    - [ ] Zaimplementowanie funkcji `parse_receipt(raw_text)` w `OCRService`.
-    - [ ] Wykorzystanie **wyrażeń regularnych (`re` module)** do:
-        - [ ] Wyodrębniania nazw produktów.
-        - [ ] Wyodrębniania cen (w formacie `XX,YY` lub `XX.YY`).
+- [x] **Preprocessing obrazów (OCR Service):**
+    - [x] Utworzenie pliku `ocr_service.py` w `app/services/`.
+    - [x] Zaimplementowanie funkcji `preprocess_image(image_path)` w `OCRService` z wykorzystaniem **OpenCV (`cv2`)** i **Pillow**.
+    - [x] Kroki preprocessingowe:
+        - [x] Wczytanie obrazu.
+        - [x] Konwersja do skali szarości.
+        - [x] Binaryzacja (np. Otsu's thresholding) lub adaptacyjne progowanie.
+        - [x] Opcjonalnie: deskewing (prostowanie przekrzywionych obrazów), redukcja szumów.
+    - [x] Zapisanie przetworzonego obrazu tymczasowo lub przekazanie go bezpośrednio do Tesseracta.
+- [x] **Ekstrakcja tekstu (OCR Service):**
+    - [x] Zaimplementowanie funkcji `extract_text(image_path)` w `OCRService`.
+    - [x] Wykorzystanie **`pytesseract.image_to_string`** na przetworzonym obrazie.
+    - [x] Określenie języka (`lang='pol'`) dla Tesseracta.
+- [x] **Parser tekstu paragonów (OCR Service):**
+    - [x] Zaimplementowanie funkcji `parse_receipt(raw_text)` w `OCRService`.
+    - [x] Wykorzystanie **wyrażeń regularnych (`re` module)** do:
+        - [x] Wyodrębniania nazw produktów.
+        - [x] Wyodrębniania cen (w formacie `XX,YY` lub `XX.YY`).
         - [ ] Opcjonalnie: identyfikacji sumy końcowej, VAT.
-    - [ ] Strukturyzowanie wyników w postaci listy słowników (np. `[{'name': 'Mleko', 'price': 3.49}]`).
-- [ ] **Integracja OCR z trasami:**
-    - [ ] Współpraca z Martyną w celu integracji `OCRService` z trasą `POST /ocr/upload`. Po uploadzie i zapisaniu pliku, wywołanie `OCRService.extract_text` i `OCRService.parse_receipt`.
-    - [ ] Zapisanie surowego tekstu z OCR i/lub sparsowanych produktów do **modelu `Receipt`** lub tymczasowej sesji.
+    - [x] Strukturyzowanie wyników w postaci listy słowników (np. `[{'name': 'Mleko', 'price': 3.49}]`).
+- [x] **Integracja OCR z trasami:**
+    - [x] Współpraca z Martyną w celu integracji `OCRService` z trasą `POST /ocr/upload`. Po uploadzie i zapisaniu pliku, wywołanie `OCRService.extract_text` i `OCRService.parse_receipt`.
+    - [x] Zapisanie surowego tekstu z OCR i/lub sparsowanych produktów do **modelu `Receipt`** lub tymczasowej sesji.
 - [ ] **Korekta wyników OCR przez użytkownika:**
     - [ ] Współpraca z Martyną przy trasie `GET /ocr/receipt/<int:id>` i `POST /ocr/receipt/<int:id>/correct`.
     - [ ] Wyświetlanie surowego tekstu i/lub sparsowanych produktów w interfejsie.
