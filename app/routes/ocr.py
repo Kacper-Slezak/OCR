@@ -69,7 +69,7 @@ def upload_receipt():
 @login_required
 def list_receipts():
     receipts = Receipt.query.filter_by(user_id=current_user.id).order_by(Receipt.upload_date.desc()).all()
-    return render_template('ocr/list_receipts.html', receipts=receipts)
+    return render_template('ocr/list_receipt.html', receipts=receipts)
 
 
 @bp.route('/<int:receipt_id>')
