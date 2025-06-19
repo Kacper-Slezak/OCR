@@ -30,7 +30,7 @@ def create_app():
     from .routes import ocr   # <-- TYLKO TEN IMPORT JEST POTRZEBNY DLA OCR ROUTINGU
 
     # Rejestrowanie blueprints w aplikacji
-    #app.register_blueprint(auth.bp) # Zarejestruj auth blueprint
+    app.register_blueprint(auth.bp) # Zarejestruj auth blueprint
     app.register_blueprint(ocr.bp)   # Zarejestruj ocr blueprint
 
     # Funkcja user_loader dla Flask-Login
