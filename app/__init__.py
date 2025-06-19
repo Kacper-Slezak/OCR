@@ -21,7 +21,7 @@ def create_app():
     # Ustawianie widoku dla niezalogowanych użytkowników
     login_manager.login_view = 'auth.login' # Załóżmy, że masz Blueprint 'auth' z logowaniem
     login_manager.login_message_category = 'info'
-    login_manager.login_message = 'Please log in to access this page.'
+    login_manager.login_message = 'Wymagane logowanie, aby korzystać ze strony.'
 
     # Importowanie blueprints
     # Ważne: importujemy MODUŁ, w którym zdefiniowany jest Blueprint,
