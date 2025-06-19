@@ -2,12 +2,12 @@
 
 ### Etap 1: Podstawy MVP - Autoryzacja i User Dashboard
 
-- [ ] **Formularze autentykacji:**
-    - [ ] Stworzenie formularza `RegistrationForm` w `app/forms.py` (username, email, password, confirm_password).
-    - [ ] Stworzenie formularza `LoginForm` w `app/forms.py` (email/username, password, remember_me).
-    - [ ] Dodanie walidacji (np. unikalność username/email, długość hasła, zgodność haseł) do formularzy WTForms.
+- [x] **Formularze autentykacji:**
+    - [x] Stworzenie formularza `RegistrationForm` w `app/forms.py` (username, email, password, confirm_password).
+    - [x] Stworzenie formularza `LoginForm` w `app/forms.py` (email/username, password, remember_me).
+    - [x] Dodanie walidacji (np. unikalność username/email, długość hasła, zgodność haseł) do formularzy WTForms.
 - [ ] **Trasy autentykacji:**
-    - [ ] Utworzenie pliku `auth.py` w `app/routes/`.
+    - [x] Utworzenie pliku `auth.py` w `app/routes/`.
     - [ ] Zaimplementowanie trasy `GET/POST /register` w `auth.py`: obsługa formularza, hashowanie hasła (za pomocą `bcrypt`), dodawanie użytkownika do DB.
     - [ ] Zaimplementowanie trasy `GET/POST /login` w `auth.py`: weryfikacja danych, logowanie użytkownika (`login_user` z Flask-Login).
     - [ ] Zaimplementowanie trasy `GET /logout` w `auth.py`: wylogowanie użytkownika (`logout_user`).

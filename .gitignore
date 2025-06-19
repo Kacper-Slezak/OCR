@@ -7,6 +7,12 @@ app/__pycache__
 app/routes/__pycache__
 app/services/__pycache__
 migrations/__pycache__
-__pycache__
-
+__pycache__/
+*.pyc
+.venv/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.vscode/
+uploads/
 
