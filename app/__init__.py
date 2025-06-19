@@ -4,11 +4,17 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager
+from flask_mail import Mail
+from apscheduler.schedulers.background import BackgroundScheduler
 import os
 
 # Utwórz instancje rozszerzeń poza funkcją, aby były dostępne globalnie
 db = SQLAlchemy()
 login_manager = LoginManager()
+
+# Zmienne dla mailow
+mail = Mail()
+scheduler = BackgroundScheduler()
 
 def create_app():
     app = Flask(__name__)
@@ -17,6 +23,9 @@ def create_app():
     db.init_app(app)
     login_manager.init_app(app)
     migrate = Migrate(app, db)
+
+    mail.init_app(app)
+    scheduler.start
 
     # Ustawianie widoku dla niezalogowanych użytkowników
     login_manager.login_view = 'auth.login' # Załóżmy, że masz Blueprint 'auth' z logowaniem
@@ -29,9 +38,13 @@ def create_app():
     from .routes import auth  # Importuj Blueprint 'auth' (jeśli istnieje)
     from .routes import ocr   # <-- TYLKO TEN IMPORT JEST POTRZEBNY DLA OCR ROUTINGU
 
+    from .routes.main import bp as main_bp
+    from .routes.notifications import bp as notif_bp #Dla powiadomień
+
     # Rejestrowanie blueprints w aplikacji
-    #app.register_blueprint(auth.bp) # Zarejestruj auth blueprint
+    app.register_blueprint(auth.bp) # Zarejestruj auth blueprint
     app.register_blueprint(ocr.bp)   # Zarejestruj ocr blueprint
+    app.register_blueprint(main_bp)
 
     # Funkcja user_loader dla Flask-Login
     @login_manager.user_loader
