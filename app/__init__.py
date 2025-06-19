@@ -21,7 +21,7 @@ def create_app():
     # Ustawianie widoku dla niezalogowanych użytkowników
     login_manager.login_view = 'auth.login' # Załóżmy, że masz Blueprint 'auth' z logowaniem
     login_manager.login_message_category = 'info'
-    login_manager.login_message = 'Please log in to access this page.'
+    login_manager.login_message = 'Wymagane logowanie, aby korzystać ze strony.'
 
     # Importowanie blueprints
     # Ważne: importujemy MODUŁ, w którym zdefiniowany jest Blueprint,
@@ -30,7 +30,7 @@ def create_app():
     from .routes import ocr   # <-- TYLKO TEN IMPORT JEST POTRZEBNY DLA OCR ROUTINGU
 
     # Rejestrowanie blueprints w aplikacji
-    #app.register_blueprint(auth.bp) # Zarejestruj auth blueprint
+    app.register_blueprint(auth.bp) # Zarejestruj auth blueprint
     app.register_blueprint(ocr.bp)   # Zarejestruj ocr blueprint
 
     # Funkcja user_loader dla Flask-Login
