@@ -64,8 +64,7 @@ def create_app():
         return User.query.get(int(user_id))
 
     with app.app_context():
-        # Tutaj możesz dodać `db.create_all()` jeśli nie używasz Flask-Migrate
-        # Jeśli używasz Flask-Migrate, to `flask db upgrade` tworzy tabele
+        db.create_all()
         pass
 
     return app

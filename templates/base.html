@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Moja Aplikacja{% endblock %}</title>
+    {# Tutaj możesz dodać linki do arkuszy stylów CSS, np. Bootstrap #}
+    {# <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"> #}
+</head>
+<body>
+    <header>
+        {# Tutaj możesz umieścić pasek nawigacyjny, logo itp. #}
+        <h1>Moja Aplikacja OCR</h1>
+        <nav>
+            <ul>
+                {% if current_user.is_authenticated %}
+                    <li><a href="{{ url_for('ocr.list_receipts') }}">Moje Paragony</a></li>
+                    <li><a href="{{ url_for('ocr.upload_receipt') }}">Prześlij Paragon</a></li>
+                    <li><a href="{{ url_for('auth.logout') }}">Wyloguj ({{ current_user.username }})</a></li>
+                {% else %}
+                    <li><a href="{{ url_for('auth.login') }}">Zaloguj</a></li>
+                    <li><a href="{{ url_for('auth.register') }}">Zarejestruj</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+        <hr>
+    </header>
+
+    <main>
+        {# Wyświetlanie komunikatów Flash - WAŻNE! #}
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <div class="flashes">
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }}"> {# Możesz użyć klas Bootstrap dla stylizacji #}
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}{% endblock %} {# <--- TO JEST KLUCZOWY ELEMENT! #}
+    </main>
+
+    <footer>
+        {# Stopka aplikacji #}
+        <p>&copy; 2025 Moja Aplikacja OCR</p>
+    </footer>
+
+    {# Tutaj możesz dodać linki do skryptów JavaScript, np. Bootstrap JS #}
+    {# <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script> #}
+    {# <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script> #}
+    {# <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script> #}
+</body>
+</html>
