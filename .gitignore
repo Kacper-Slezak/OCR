@@ -2,3 +2,11 @@
 app/static/uploads/
 .env
 /app.db
+__pycache__/
+*.pyc
+.venv/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.vscode/
+uploads/
