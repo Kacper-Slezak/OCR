@@ -1,5 +1,5 @@
 from decimal import Decimal
-
+import numpy as np
 import cv2
 from PIL import Image
 import pytesseract
@@ -23,8 +23,7 @@ def set_tesseact_path():
 def preprocess_image(image_path):
     """
     Preprocess the image for OCR.
-    Gray scale
-    Delete noise
+    Includes advanced denoising, contrast enhancement, sharpening, and adaptive thresholding.
     :param image_path: path to image
     :return: preprocessed image
     """
@@ -33,17 +32,46 @@ def preprocess_image(image_path):
         if image is None:
             raise FileNotFoundError(f"{image_path} is not a valid image.")
 
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        gray = cv2.GaussianBlur(gray, (5, 5), 0)
-        thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+        gray = cv2.cvtColor(image, cv2.BGR2GRAY)
+
+        # 1. Denoising: Non-local Means Denoising
+        # This is excellent for removing various types of noise while preserving text edges.
+        # h: filter strength (higher for more aggressive denoising), templateWindowSize & searchWindowSize for local area
+        denoised = cv2.fastNlMeansDenoising(gray, None, h=30, templateWindowSize=7, searchWindowSize=21)
+
+        # 2. Contrast Enhancement: CLAHE (Contrast Limited Adaptive Histogram Equalization)
+        # Improves local contrast, making text pop out from the background, especially in unevenly lit areas.
+        clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8)) # Adjusted clipLimit slightly
+        enhanced = clahe.apply(denoised)
+
+        # 3. Sharpening: Enhance text edges using an unsharp mask
+        # This technique enhances edges without increasing noise as much as a simple sharpening kernel.
+        # First, blur the image
+        blurred = cv2.GaussianBlur(enhanced, (0,0), 3) # Gaussian blur with sigmaX=3
+        # Then, subtract the blurred image from the original (scaled)
+        sharpened = cv2.addWeighted(enhanced, 1.5, blurred, -0.5, 0) # Adjust alpha (1.5) and beta (-0.5) for intensity
+
+        # 4. Remove small specks (noise) - erosion followed by dilation (Opening)
+        # This helps in removing tiny dots or disconnected components that aren't part of the text.
+        kernel_open = np.ones((1,1), np.uint8) # A small kernel is usually sufficient for text noise
+        cleaned = cv2.morphologyEx(sharpened, cv2.MORPH_OPEN, kernel_open)
+
+        # 5. Binarization: Adaptive Thresholding
+        # Using ADAPTIVE_THRESH_GAUSSIAN_C is robust for receipts with varied lighting.
+        # block size: 31 (must be odd), C: 2 (constant subtracted from mean/weighted mean)
+        thresh = cv2.adaptiveThreshold(
+            cleaned, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY, 31, 2
+        )
 
         return Image.fromarray(thresh)
     except Exception as e:
-        print(f"Błąd podczas przetwarzania obrazu '{image_path}': {e}")
+        print(f"Error during image processing for '{image_path}': {e}")
         try:
+            # Fallback to opening the original image if preprocessing fails
             return Image.open(image_path)
         except Exception as img_e:
-            print(f"Nie udało się wczytać oryginalnego obrazu: {img_e}")
+            print(f"Could not load original image: {img_e}")
             return None
 
 def run_ocr(image_path):
@@ -78,7 +106,7 @@ def run_ocr(image_path):
             return "ERROR: Image preprocessing failed."
 
         # Ustawienie opcji konfiguracji dla Tesseracta
-        tess_config = '--oem 3 --psm 3 -c tessedit_create_hocr=0 -c tessedit_write_images=0'
+        tess_config = '--oem 3 --psm 6'
         raw_text = pytesseract.image_to_string(preprocessed_image, lang='pol', config=tess_config)
 
         return raw_text
