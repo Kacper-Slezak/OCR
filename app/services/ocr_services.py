@@ -1,4 +1,3 @@
-from decimal import Decimal
 import numpy as np
 import cv2
 from PIL import Image
@@ -141,79 +140,9 @@ def run_ocr(image_path):
             os.environ.pop('TMP', None)
 
 
-def clean_ocr_text(text):
-    """
-    Clean and normalize OCR text to fix common recognition errors.
-    """
-    # Character substitutions for common OCR errors
-    substitutions = {
-        'ĄĄ': 'AA',
-        'ęę': 'ee',
-        'ŻŻ': 'ZZ',
-        'ŹŹ': 'ZZ',
-        'ĆĆ': 'CC',
-        'ŁŁ': 'LL',
-        'ŃŃ': 'NN',
-        'ÓÓ': 'OO',
-        'ŚŚ': 'SS',
-        '|': 'I',
-        '!': 'I',
-        'O': '0',  # Only in price contexts
-        'S': '5',  # Only in price contexts
-        'l': '1',  # Only in price contexts
-        'I': '1',  # Only in price contexts
-        'b': '6',  # Common in OCR
-        'G': '6',  # Common in OCR
-        'A': '4',  # In some contexts
-        'T': '7',  # In some contexts
-        'Z': '2',  # In some contexts
-        'B': '8',  # In some contexts
-    }
-
-    # Apply substitutions
-    cleaned_text = text
-    for old, new in substitutions.items():
-        cleaned_text = cleaned_text.replace(old, new)
-
-    # Fix common Polish OCR errors
-    polish_fixes = {
-        'Czek': 'Czek',
-        'Gorzowska': 'Gorzowska',
-        'Poma': 'Poma',
-        'Melt': 'Melt',
-        'Jaja': 'Jaja',
-        'Kyb': 'Kyb',
-        'Piuo': 'Piwo',
-        'Budueiser': 'Budweiser',
-        'Salankrakiędkix': 'Salami Krakowski',
-        'Schab': 'Schab',
-        'Szynka': 'Szynka',
-        'Herbata': 'Herbata',
-        'Jutrzeni': 'Jutrzenki',
-        'Ketchup': 'Ketchup',
-        'PikKot': 'Pikant',
-        'Tost': 'Tost',
-        'Pszenny': 'Pszenny',
-        'Pierniki': 'Pierniki',
-        'Wafki': 'Wafle',
-        'Orzech': 'Orzech',
-        'Limonka': 'Limonka',
-        'Kostki': 'Kostki',
-        'Lodu': 'Lodu',
-        'Bułka': 'Bułka',
-        'Codzienna': 'Codzienna',
-    }
-
-    for old, new in polish_fixes.items():
-        cleaned_text = re.sub(re.escape(old), new, cleaned_text, flags=re.IGNORECASE)
-
-    return cleaned_text
-
-
 def parse_ocr(raw_text):
-    """
-    Enhanced OCR parsing with better pattern recognition.
-    """
+    from decimal import Decimal
+
     parsed_data = {
         "items": [],
         "total": None,
@@ -222,223 +151,120 @@ def parse_ocr(raw_text):
         "raw_text": raw_text
     }
 
-    # Clean the text first
-    cleaned_text = clean_ocr_text(raw_text)
-    lines = cleaned_text.split('\n')
-
-    # Enhanced regex patterns
-    item_patterns = [
-        # Pattern 1: Product name + quantity + unit price + total price
-        re.compile(
-            r'^(.+?)\s+(\d+)\s*[x×]\s*([0-9]{1,3}[.,]?\s*[0-9]{1,2})\s+([0-9]{1,3}[.,]?\s*[0-9]{1,2})\s*([A-Z])?$',
-            re.IGNORECASE),
-
-        # Pattern 2: Product name + price + tax category
-        re.compile(r'^(.+?)\s+([0-9]{1,3}[.,]?\s*[0-9]{1,2})\s*([A-Z])?$', re.IGNORECASE),
-
-        # Pattern 3: Product name with quantity in parentheses + price
-        re.compile(
-            r'^(.+?)\s*\(\s*(\d+)\s*[x×]\s*([0-9]{1,3}[.,]?\s*[0-9]{1,2})\s*\)\s+([0-9]{1,3}[.,]?\s*[0-9]{1,2})\s*([A-Z])?$',
-            re.IGNORECASE),
-
-        # Pattern 4: Quantity + product name + price
-        re.compile(r'^(\d+)\s*[x×]\s*(.+?)\s+([0-9]{1,3}[.,]?\s*[0-9]{1,2})\s*([A-Z])?$', re.IGNORECASE),
-
-        # Pattern 5: Product name + multiple prices (unit and total)
-        re.compile(r'^(.+?)\s+([0-9]{1,3}[.,]?\s*[0-9]{1,2})\s+([0-9]{1,3}[.,]?\s*[0-9]{1,2})\s*([A-Z])?$',
-                   re.IGNORECASE),
-    ]
-
-    # Enhanced ignore patterns
-    ignore_patterns = [
-        re.compile(
-            r'^(BIEDRONKA|PARAGON\s*FISKALNY|SPRZEDAŻ\s*OPODATK|PTU|SUMA|TOTAL|RAZEM|GOTÓWKA|KARTA|SKLEP|JERONIMO|MARTINS|POLSKA|NIP|NUMER|TRANSAKCJI|KASY|KASJERA|DZIEKUJEMY|ZAPRASZAMY|RABAT).*$',
-            re.IGNORECASE),
-        re.compile(r'^\d{2}[-./]\d{2}[-./]\d{2,4}.*$'),  # Dates
-        re.compile(r'^\d{4,}.*$'),  # Long numbers
-        re.compile(r'^[A-Z0-9]{10,}.*$'),  # System codes
-        re.compile(r'^[A-Z]\s*\d+[.,]?\d*%?$'),  # Tax codes
-        re.compile(r'^\d{2}-\d{3}.*$'),  # Postal codes
-        re.compile(r'^UL\..*$', re.IGNORECASE),  # Addresses
-        re.compile(r'^[\s\d\-,.©cC]+$'),  # Only symbols and numbers
-        re.compile(r'^[A-Za-z]{1,2}$'),  # Single letters
-        re.compile(r'^[.,\-\s]+$'),  # Only punctuation
-        re.compile(r'^SPRZEDA[ŻZ]?\s*OPODATKOW.*$', re.IGNORECASE),
-        re.compile(r'^PTU\s*[A-Z].*$', re.IGNORECASE),
-        re.compile(r'^SUMA\s*PLN.*$', re.IGNORECASE),
-    ]
-
     def normalize_price(price_str):
-        """Enhanced price normalization"""
         if not price_str:
             return None
-
-        # Remove spaces and normalize
-        price_str = price_str.replace(' ', '').replace(',', '.')
-
-        # Handle different price formats
-        if re.match(r'^\d+\.\d{2}$', price_str):
-            return price_str
-        elif re.match(r'^\d+\.\d{1}$', price_str):
-            return price_str + '0'
-        elif re.match(r'^\d+$', price_str):
-            return price_str + '.00'
-        elif re.match(r'^\d+\.\d{3,}$', price_str):
-            # Probably missing decimal separator
-            return price_str[:-2] + '.' + price_str[-2:]
-
-        # Try to extract valid price
-        numbers = re.findall(r'\d+', price_str)
-        if len(numbers) >= 2:
-            return f"{numbers[0]}.{numbers[1][:2].zfill(2)}"
-        elif len(numbers) == 1:
-            num = numbers[0]
-            if len(num) <= 2:
-                return f"0.{num.zfill(2)}"
-            else:
-                return f"{num[:-2]}.{num[-2:]}"
-
-        return price_str
-
-    def extract_date(text):
-        """Extract date from text"""
-        date_patterns = [
-            re.compile(r'(\d{4})-(\d{2})-(\d{2})', re.IGNORECASE),
-            re.compile(r'(\d{2})/(\d{2})/(\d{4})', re.IGNORECASE),
-            re.compile(r'(\d{2})\.(\d{2})\.(\d{4})', re.IGNORECASE),
-            re.compile(r'(\d{2})-(\d{2})-(\d{4})', re.IGNORECASE),
-        ]
-
-        for pattern in date_patterns:
-            match = pattern.search(text)
-            if match:
-                if len(match.group(1)) == 4:  # Year first
-                    return f"{match.group(3)}/{match.group(2)}/{match.group(1)}"
-                else:  # Day first
-                    return f"{match.group(1)}/{match.group(2)}/{match.group(3)}"
+        s = price_str.strip().replace(',', '.')
+        # Usuń litery A, B, C na końcu
+        s = re.sub(r'[ABCćĆ©]$', '', s)
+        if re.fullmatch(r'\d{3}', s):
+            s = f"{s[:-2]}.{s[-2:]}"
+        m = re.search(r'(\d+)\.?(\d{2})', s)
+        if m:
+            return f"{m.group(1)}.{m.group(2)}"
         return None
 
     def extract_total(text):
-        """Extract total amount from text"""
-        total_patterns = [
-            re.compile(r'SUMA\s+PLN\s+([0-9]{1,3}[.,]?\s*[0-9]{1,2})', re.IGNORECASE),
-            re.compile(r'RAZEM\s+([0-9]{1,3}[.,]?\s*[0-9]{1,2})', re.IGNORECASE),
-            re.compile(r'TOTAL\s+([0-9]{1,3}[.,]?\s*[0-9]{1,2})', re.IGNORECASE),
-            re.compile(r'([0-9]{1,3}[.,]?\s*[0-9]{1,2})\s*$', re.MULTILINE),  # End of line price
-        ]
-
-        for pattern in total_patterns:
-            match = pattern.search(text)
-            if match:
-                cleaned_price = normalize_price(match.group(1))
-                if cleaned_price:
-                    try:
-                        return str(Decimal(cleaned_price))
-                    except:
-                        continue
+        m = re.search(r'SUMA\s+PLN\s+([0-9]+[.,]\d{2})', text, re.IGNORECASE)
+        if m:
+            p = normalize_price(m.group(1))
+            try:
+                return str(Decimal(p))
+            except:
+                pass
         return None
 
-    def is_valid_product_name(name):
-        """Check if product name is valid"""
-        if not name or len(name.strip()) < 2:
-            return False
+    def clean_name(n):
+        n = re.sub(r'[|()©*]', '', n)
+        n = re.sub(r'\s+', ' ', n).strip()
+        return re.sub(r'\s+\d{4,}$', '', n)
 
-        name = name.strip()
+    def is_valid_name(n):
+        if re.match(r'^\d', n): return False
+        letters = len(re.findall(r'[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]', n))
+        digits = len(re.findall(r'\d', n))
+        return letters >= digits and len(n.strip()) >= 3
 
-        # Must contain at least one letter
-        if not re.search(r'[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]', name):
-            return False
+    def parse_product_line(line):
+        """Parsuje linię produktu i zwraca nazwę, ilość, cenę jednostkową i całkowitą"""
+        print(f"DEBUG: Parsing line: '{line}'")
 
-        # Reject if mostly numbers
-        if len(re.sub(r'[^0-9]', '', name)) > len(name) * 0.7:
-            return False
+        # Wzorzec: wszystko do momentu gdy znajdziemy cyfra+x cyfra,cyfra cyfra,cyfra+litera
+        # Przykład: "OrzechZi emPapryk240g C 1x 6,29 6,29C"
+        pattern = r'^(.+?)\s+[ABCćĆ©]?\s*(?:\([^)]*\))?\s*(\d+)x\s+([0-9]+[,.]?[0-9]*)\s+([0-9]+[,.]?[0-9]*)[ABCćĆ©]?$'
 
-        # Reject obvious garbage
-        garbage_patterns = [
-            r'^[.,\-\s]+$',
-            r'^\d+:\s*$',
-            r'^[A-Z]{1,2}$',
-            r'^[b-z]{1,2}$',
-        ]
+        match = re.match(pattern, line.strip())
+        if match:
+            name = match.group(1).strip()
+            quantity = int(match.group(2))
+            unit_price = normalize_price(match.group(3))
+            total_price = normalize_price(match.group(4))
 
-        for pattern in garbage_patterns:
-            if re.match(pattern, name, re.IGNORECASE):
-                return False
+            print(f"DEBUG: Found - name: '{name}', qty: {quantity}, unit: {unit_price}, total: {total_price}")
+            return name, quantity, unit_price, total_price
 
-        return True
+        print(f"DEBUG: No match for line: '{line}'")
+        return None, None, None, None
 
-    # Extract metadata
-    parsed_data["date"] = extract_date(raw_text)
     parsed_data["total"] = extract_total(raw_text)
+    lines = raw_text.splitlines()
 
-    # Extract store info
-    if "BIEDRONKA" in raw_text.upper():
-        parsed_data["store"] = "Biedronka"
-
-    # Parse items
-    for line in lines:
-        original_line = line.strip()
-
-        if not original_line or len(original_line) < 3:
+    items = []
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if not line or len(line) < 3:
+            i += 1
             continue
 
-        # Check ignore patterns
-        should_ignore = False
-        for pattern in ignore_patterns:
-            if pattern.search(original_line):
-                should_ignore = True
-                break
-
-        if should_ignore:
+        # Pomijamy systemowe linie
+        if re.search(r'(PARAGON|SPRZEDAŻ|PTU|SUMA)', line, re.IGNORECASE):
+            i += 1
             continue
 
-        # Try to match item patterns
-        for pattern_index, pattern in enumerate(item_patterns):
-            match = pattern.search(original_line)
-            if match:
-                try:
-                    item_data = {}
+        # Parsuj linię produktu
+        name, quantity, unit_price, total_price = parse_product_line(line)
 
-                    if pattern_index == 0:  # Product + quantity + unit price + total
-                        product_name = match.group(1).strip()
-                        quantity = int(match.group(2))
-                        unit_price = normalize_price(match.group(3))
-                        total_price = normalize_price(match.group(4))
-                        tax_category = match.group(5) if len(match.groups()) > 4 else None
+        if name and quantity and unit_price and total_price:
+            name = clean_name(name)
 
-                        if is_valid_product_name(product_name):
-                            item_data["name"] = product_name
-                            item_data["quantity"] = quantity
-                            if unit_price:
-                                item_data["unit_price"] = str(Decimal(unit_price))
-                            if total_price:
-                                item_data["total_price"] = str(Decimal(total_price))
-                            if tax_category:
-                                item_data["tax_category"] = tax_category
+            if is_valid_name(name):
+                item = {
+                    "name": name,
+                    "quantity": quantity,
+                    "unit_price": str(Decimal(unit_price)),
+                    "total_price": str(Decimal(total_price))
+                }
 
-                    elif pattern_index == 1:  # Product + price + tax
-                        product_name = match.group(1).strip()
-                        price = normalize_price(match.group(2))
-                        tax_category = match.group(3) if len(match.groups()) > 2 else None
+                # Sprawdź rabat w następnych liniach
+                if i + 1 < len(lines) and i + 2 < len(lines):
+                    next_line = lines[i + 1].strip()
+                    price_line = lines[i + 2].strip()
 
-                        if is_valid_product_name(product_name):
-                            item_data["name"] = product_name
-                            if price:
-                                item_data["price"] = str(Decimal(price))
-                            if tax_category:
-                                item_data["tax_category"] = tax_category
+                    # Sprawdź czy to rabat
+                    if "rabat" in next_line.lower() or next_line.startswith('-'):
+                        rabat_match = re.search(r'-([0-9]+[.,][0-9]{2})', next_line)
+                        price_match = re.search(r'^([0-9]+[.,][0-9]{2})[ABCćĆ©]?$', price_line)
 
-                    # Similar processing for other patterns...
+                        if rabat_match and price_match:
+                            rabat_amount = normalize_price(rabat_match.group(1))
+                            final_price = normalize_price(price_match.group(1))
 
-                    # Add item if valid
-                    if item_data.get("name") and (item_data.get("price") or item_data.get("total_price")):
-                        parsed_data["items"].append(item_data)
-                        break
+                            if rabat_amount and final_price:
+                                item["discount_amount"] = str(Decimal(rabat_amount))
+                                item["original_price"] = item["total_price"]
+                                item["total_price"] = str(Decimal(final_price))
+                                i += 3  # Przeskocz produkt, rabat, cenę końcową
+                                items.append(item)
+                                continue
 
-                except (ValueError, IndexError, Exception) as e:
-                    continue
+                items.append(item)
 
+        i += 1
+
+    parsed_data["items"] = items
     return parsed_data
+
 
 
 def process_receipt_image(receipe_id, image_path):
@@ -456,12 +282,12 @@ def process_receipt_image(receipe_id, image_path):
         raw_text = run_ocr(image_path)
         receipt.raw_text = raw_text
 
-        if raw_text.startswith("ERROR"): # Sprawdzamy czy komunikat zaczyna się od "ERROR"
+        if raw_text.startswith("ERROR"):
             receipt.status = 'ERROR'
             receipt.processed_data = json.dumps({"error": raw_text})
         else:
             parsed_data = parse_ocr(raw_text)
-            receipt.set_processed_data(parsed_data) # Pamiętaj, żeby to było poprawione
+            receipt.set_processed_data(parsed_data)
             receipt.status = 'Processed'
         db.session.commit()
         print(f"Processed receipt {receipe_id}. Status: {receipt.status}")
