@@ -109,19 +109,25 @@ def edit_receipt(receipt_id):
         i = 0
         while True:
             name = request.form.get(f'product_name_{i}')
-            price_str = request.form.get(f'product_price_{i}')
+            quantity = request.form.get(f'product_quantity_{i}')
+            unit = request.form.get(f'product_unit_{i}')
+            total = request.form.get(f'product_total_{i}')
+            discount = request.form.get(f'product_discount_{i}')
 
-            if name is None and price_str is None:
+            if name is None:
                 break
 
-            if name and price_str:
-                try:
-                    price = float(price_str.replace(',', '.'))
-                    edited_items.append(
-                        {'name': name, 'price': str(price)})  # Zapisz jako string dla zgodności z Decimal
-                except ValueError:
-                    flash(f"Nieprawidłowy format ceny dla '{name}'. Użyj liczby z kropką lub przecinkiem.", 'danger')
-                    return redirect(url_for('ocr.edit_receipt', receipt_id=receipt.id))
+            item = {"name": name}
+            if quantity:
+                item["quantity"] = int(quantity)
+            if unit:
+                item["unit_price"] = str(float(unit.replace(",", ".")))
+            if total:
+                item["total_price"] = str(float(total.replace(",", ".")))
+            if discount:
+                item["discount_amount"] = str(float(discount.replace(",", ".")))
+
+            edited_items.append(item)
             i += 1
 
         # Zapisz w formacie zgodnym z parse_ocr - z kluczem "items"
