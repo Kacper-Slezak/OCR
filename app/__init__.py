@@ -51,14 +51,14 @@ def create_app():
 
     from .routes.main import bp as main_bp
     from .routes.notifications import bp as notif_bp #Dla powiadomień
-    from .routes.shopping import shopping_bp
+    from .routes.recipt import recipt_bp
 
 
     # Rejestrowanie blueprints w aplikacji
     app.register_blueprint(auth.bp) # Zarejestruj auth blueprint
     app.register_blueprint(ocr.bp)   # Zarejestruj ocr blueprint
     app.register_blueprint(main_bp)
-    app.register_blueprint(shopping_bp)
+    app.register_blueprint(recipt_bp)
 
 
 

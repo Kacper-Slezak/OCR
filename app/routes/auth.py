@@ -21,7 +21,7 @@ def login():
     if current_user.is_authenticated:
         # Zmieniono 'base.html' na 'ocr.list_receipts' jako stronę po zalogowaniu
         # lub na 'main.index' jeśli masz główną stronę po zalogowaniu
-        return redirect(url_for('ocr.list_receipts'))  # Domyślna strona po zalogowaniu
+        return redirect(url_for('app.dashboard'))  # Domyślna strona po zalogowaniu
 
     form = LoginForm()  # <--- INICJALIZACJA FORMULARZA WTFORMS
 
@@ -40,7 +40,7 @@ def login():
             flash('Zalogowano pomyślnie!', 'success')  # Użyj kategorii dla stylizacji Bootstrapem
             next_page = request.args.get('next')  # Pobierz adres, na który użytkownik chciał iść przed zalogowaniem
             return redirect(
-                next_page or url_for('ocr.list_receipts'))  # Przekieruj na oryginalny adres lub domyślną stronę
+                next_page or url_for('app.dashboard'))  # Przekieruj na oryginalny adres lub domyślną stronę
 
         else:
             flash('Nieprawidłowa nazwa użytkownika/email lub hasło.', 'danger')  # Użyj kategorii dla stylizacji
