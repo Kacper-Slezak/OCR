@@ -77,45 +77,79 @@ def list_receipts():
 def view_receipt(receipt_id):
     receipt = Receipt.query.filter_by(id=receipt_id, user_id=current_user.id).first_or_404()
     parsed_data = receipt.get_processed_data()
-    return render_template('ocr/view_receipt.html', receipt=receipt, parsed_data=parsed_data)
 
+    # Wyciągnij produkty z odpowiedniej struktury dla szablonu
+    products = []
+    total = None
+    date = None
 
+    if parsed_data:
+        if isinstance(parsed_data, dict) and 'items' in parsed_data:
+            # Nowy format z parse_ocr
+            products = parsed_data.get('items', [])
+            total = parsed_data.get('total')
+            date = parsed_data.get('date')
+        elif isinstance(parsed_data, list):
+            # Stary format (lista produktów)
+            products = parsed_data
+
+    return render_template('ocr/view_receipt.html',
+                           receipt=receipt,
+                           parsed_data=parsed_data,
+                           products=products,
+                           total=total,
+                           date=date)
 @bp.route('/receipt/<int:receipt_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_receipt(receipt_id):
     receipt = Receipt.query.filter_by(id=receipt_id, user_id=current_user.id).first_or_404()
 
     if request.method == 'POST':
-        edited_data = []
+        edited_items = []
         i = 0
         while True:
             name = request.form.get(f'product_name_{i}')
-            price_str = request.form.get(f'product_price_{i}')  # Pobierz jako string
+            price_str = request.form.get(f'product_price_{i}')
 
             if name is None and price_str is None:
                 break
 
             if name and price_str:
                 try:
-                    price = float(price_str.replace(',', '.'))  # Konwersja na float, obsługa przecinka
-                    edited_data.append({'name': name, 'price': price})
+                    price = float(price_str.replace(',', '.'))
+                    edited_items.append(
+                        {'name': name, 'price': str(price)})  # Zapisz jako string dla zgodności z Decimal
                 except ValueError:
                     flash(f"Nieprawidłowy format ceny dla '{name}'. Użyj liczby z kropką lub przecinkiem.", 'danger')
-                    # W przypadku błędu formatu, ponownie renderuj formularz z danymi, które użytkownik wprowadził
-                    # aby nie stracił pracy. To wymagałoby złożenia nowej listy produktów z request.form.
-                    # Dla uproszczenia, na razie przekierowujemy:
                     return redirect(url_for('ocr.edit_receipt', receipt_id=receipt.id))
             i += 1
 
+        # Zapisz w formacie zgodnym z parse_ocr - z kluczem "items"
+        edited_data = {
+            "items": edited_items,
+            "total": None,  # Możesz dodać pole dla sumy jeśli chcesz
+            "date": None  # Możesz dodać pole dla daty jeśli chcesz
+        }
+
         receipt.set_processed_data(edited_data)
-        receipt.status = 'processed'  # Lub 'corrected'
+        receipt.status = 'processed'
         db.session.commit()
         flash('Paragon został pomyślnie skorygowany!', 'success')
         return redirect(url_for('ocr.list_receipts'))
     else:
-        processed_products = receipt.get_processed_data()
-        if not processed_products:
-            # Jeśli nie ma przetworzonych danych, możesz zainicjować pustą listę do edycji.
+        processed_data = receipt.get_processed_data()
+
+        # Wyciągnij produkty z odpowiedniej struktury
+        if processed_data:
+            if isinstance(processed_data, dict) and 'items' in processed_data:
+                # Nowy format z parse_ocr
+                processed_products = processed_data['items']
+            elif isinstance(processed_data, list):
+                # Stary format (lista produktów)
+                processed_products = processed_data
+            else:
+                processed_products = []
+        else:
             processed_products = []
             flash('Brak przetworzonych danych dla tego paragonu. Rozpocznij edycję od zera.', 'info')
 
