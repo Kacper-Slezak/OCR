@@ -13,9 +13,7 @@
         <nav>
             <ul>
                 {% if current_user.is_authenticated %}
-                    <li><a href="{{ url_for('shopping.dashboard') }}">Home</a></li>
-                    <li><a href="{{ url_for('ocr.list_receipts') }}">Moje Paragony</a></li>
-                    <li><a href="{{ url_for('ocr.upload_receipt') }}">Prześlij Paragon</a></li>
+                    <li><a href="{{ url_for('main.dashboard') }}">Home</a></li>
                     <li><a href="{{ url_for('auth.logout') }}">Wyloguj ({{ current_user.username }})</a></li>
                 {% else %}
                     <li><a href="{{ url_for('auth.login') }}">Zaloguj</a></li>
