@@ -43,10 +43,10 @@
 
 - [ ] **Trasy dla list zakupów:**
 	- [ ] Współpraca z Kirylem na backend
-    - [ ] Utworzenie pliku `shopping.py` w `app/routes/`.
-    - [ ] Zaimplementowanie trasy `GET /shopping/` (dashboard z listami użytkownika).
-    - [ ] Zaimplementowanie trasy `GET/POST /shopping/create` (formularz i logika tworzenia nowej listy).
-    - [ ] Zaimplementowanie trasy `GET /shopping/list/<int:id>` (szczegóły konkretnej listy).
+    - [x] Utworzenie pliku `recipt.py` w `app/routes/`.
+    - [x] Zaimplementowanie trasy `GET /` (dashboard z listami użytkownika).
+    - [ ] Zaimplementowanie trasy `GET/POST /recipt` (formularz i logika tworzenia nowej listy).
+    - [x] Zaimplementowanie trasy `GET /recipt/<int:id>` (szczegóły konkretnej listy).
     - [ ] Zaimplementowanie trasy `POST /shopping/list/<int:id>/add_product` (dodawanie produktu do listy ręcznie, korzystając z modelu `Product`).
     - [ ] Zaimplementowanie trasy `POST /shopping/list/<int:id>/add_participant` (dodawanie innych użytkowników do listy, korzystając z modelu `User` i relacji).
     - [ ] Zaimplementowanie trasy `POST /shopping/list/<int:id>/complete` (oznaczanie listy jako ukończonej, aktualizując **model `ShoppingList`**).

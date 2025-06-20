@@ -1,6 +1,7 @@
 # tests/test_models.py
 import pytest
 from app.models import User, ShoppingList, Product, Receipt, Settlement, shopping_list_participants
+from app import create_app, mail
 from datetime import datetime
 from decimal import Decimal
 
@@ -204,3 +205,21 @@ def test_product_receipt_relation(session, test_user):
 
     retrieved_receipt = Receipt.query.get(receipt.id)
     assert product in retrieved_receipt.products_from_receipt.all()
+
+# Testy dla modelu Wiadomości
+
+def client(monkeypatch):
+    app = create_app()
+    app.config.update({
+        'TESTING': True,
+        'MAIL_SUPPRESS_SEND': True  # не шлём реально
+    })
+    return app.test_client()
+
+def test_welcome_notification(client):
+    resp = client.post('/notify/welcome', json={
+        'email': 'test@example.com',
+        'user_name': 'Игорь'
+    })
+    assert resp.status_code == 200
+

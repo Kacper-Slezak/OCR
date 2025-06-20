@@ -1,10 +1,9 @@
-# Importujemy funkcję create_app z Twojego pakietu 'app'
-# Ta linia odwołuje się do funkcji create_app z app/__init__.py
+# run.py
+from dotenv import load_dotenv
 from app import create_app
 
-# Wywołujemy funkcję create_app(), która zwraca skonfigurowaną instancję aplikacji Flask.
+load_dotenv()
 app = create_app()
 
-
 if __name__ == '__main__':
-    app.run(debug=True) # debug=True jest dobre dla rozwoju
+    app.run()
