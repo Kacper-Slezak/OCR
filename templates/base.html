@@ -3,20 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Moja Aplikacja{% endblock %}</title>
-    {# Tutaj możesz dodać linki do arkuszy stylów CSS, np. Bootstrap #}
+    <title>{% block title %}Splitit?{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
-    {# <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"> #}
+    {# TODO <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"> #}
 </head>
 <body>
     <header>
-        {# Tutaj możesz umieścić pasek nawigacyjny, logo itp. #}
-        <h1>Moja Aplikacja OCR</h1>
+        <h1>Splitit?</h1>
         <nav>
             <ul>
                 {% if current_user.is_authenticated %}
-                    <li><a href="{{ url_for('ocr.list_receipts') }}">Moje Paragony</a></li>
-                    <li><a href="{{ url_for('ocr.upload_receipt') }}">Prześlij Paragon</a></li>
+                    <li><a href="{{ url_for('main.dashboard') }}">Home</a></li>
                     <li><a href="{{ url_for('auth.logout') }}">Wyloguj ({{ current_user.username }})</a></li>
                 {% else %}
                     <li><a href="{{ url_for('auth.login') }}">Zaloguj</a></li>
@@ -29,6 +26,7 @@
 
     <main>
         {# Wyświetlanie komunikatów Flash - WAŻNE! #}
+        {# CZEMU TAKIE WAŻNE? #}
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 <div class="flashes">
@@ -41,12 +39,11 @@
             {% endif %}
         {% endwith %}
 
-        {% block content %}{% endblock %} {# <--- TO JEST KLUCZOWY ELEMENT! #}
+        {% block content %}{% endblock %} {# <--- TO JEST KLUCZOWY ELEMENT! #} {# OK CHAT #} {# MA RACJE THO #}
     </main>
 
     <footer>
-        {# Stopka aplikacji #}
-        <p>&copy; 2025 **NASZA** Aplikacja OCR</p>
+        <p>&copy; 2025 Splitit?</p>
     </footer>
 
     {# Tutaj możesz dodać linki do skryptów JavaScript, np. Bootstrap JS #}
