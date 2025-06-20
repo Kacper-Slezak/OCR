@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Moja Aplikacja{% endblock %}</title>
     {# Tutaj możesz dodać linki do arkuszy stylów CSS, np. Bootstrap #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     {# <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"> #}
 </head>
 <body>
@@ -45,7 +46,7 @@
 
     <footer>
         {# Stopka aplikacji #}
-        <p>&copy; 2025 Moja Aplikacja OCR</p>
+        <p>&copy; 2025 **NASZA** Aplikacja OCR</p>
     </footer>
 
     {# Tutaj możesz dodać linki do skryptów JavaScript, np. Bootstrap JS #}

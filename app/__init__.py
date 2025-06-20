@@ -48,13 +48,18 @@ def create_app():
     from .routes import auth
     from .routes import ocr
 
+
     from .routes.main import bp as main_bp
     from .routes.notifications import bp as notif_bp #Dla powiadomień
+    from .routes.shopping import shopping_bp
+
 
     # Rejestrowanie blueprints w aplikacji
     app.register_blueprint(auth.bp) # Zarejestruj auth blueprint
     app.register_blueprint(ocr.bp)   # Zarejestruj ocr blueprint
     app.register_blueprint(main_bp)
+    app.register_blueprint(shopping_bp)
+
 
 
     # Funkcja user_loader dla Flask-Login

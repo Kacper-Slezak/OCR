@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+    <h1 class="title">Your Dashboard</h1>
+    <div class = "content">
+        {% if lists|length < 1 %}
+        <h4>No lists</h4>
+        {% else %}
+        <h4>Lists:</h4>
+        <table>
+            <tr>
+                <th>List</th>
+                <th>Date</th>
+                <th>Ownership</th>
+                <th>Details</th>
+            </tr>
+            {% for list in lists %}
+                <tr>
+                    <td>{{ list.name }}</td>
+                    <td>{{ list.created_at }}</td>
+                    <td>{{ list.created_by }}</td>
+                    <td>
+                        <a href="/ocr/<int:receipt_id>">details</a>
+                    </td>
+                </tr>
+        </table>
+    </div>
+{% endblock %}

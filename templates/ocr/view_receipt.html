@@ -1,16 +1,7 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Receipt Details - {{ receipt.id }}</title>
-    <style>
-        pre { background-color: #f4f4f4; padding: 10px; border: 1px solid #ddd; white-space: pre-wrap; word-wrap: break-word; }
-        .error { color: red; font-weight: bold; }
-        .success { color: green; }
-    </style>
-</head>
-<body>
+{% extends "base.html" %}
+{% block title %}Receipt Details - {{ receipt.id }}{% endblock %}
+
+{% block content %}
     <h1>Receipt Details - {{ receipt.id }}</h1>
     <p><strong>Uploaded by:</strong> {{ receipt.uploader.username }}</p>
     <p><strong>Upload Date:</strong> {{ receipt.upload_date.strftime('%Y-%m-%d %H:%M') }}</p>
@@ -34,5 +25,4 @@
 
     <p><a href="{{ url_for('ocr.list_receipts') }}">Back to Receipt List</a></p>
     <p><a href="{{ url_for('ocr.upload_receipt') }}">Upload another receipt</a></p>
-</body>
-</html>
+{% endblock %}
