@@ -6,6 +6,7 @@ import os
 import re
 from flask import current_app as app
 import json
+from decimal import Decimal
 
 
 def set_tesseact_path():
@@ -156,8 +157,6 @@ def run_ocr(image_path):
 
 
 def parse_ocr(raw_text):
-    from decimal import Decimal
-
     parsed_data = {
         "items": [],
         "total": None,
@@ -231,7 +230,7 @@ def parse_ocr(raw_text):
     def is_valid_name(n):
         if not n: return False
         n_cleaned = n.strip()
-        if len(n_cleaned) < 3: return False # Minimum length for a product name
+        if len(n_cleaned) < 4: return False # Minimum length for a product name
         # Check if the name consists mostly of non-alphanumeric characters or only numbers
         letters = len(re.findall(r'[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]', n_cleaned))
         digits = len(re.findall(r'\d', n_cleaned))
@@ -244,7 +243,7 @@ def parse_ocr(raw_text):
         if re.match(r'^\d', n_cleaned): return False # Does not start with a digit (unless it's a known product code, but generally not)
 
         # Avoid lines that are just single letters or very short common words that might be OCR errors
-        if n_cleaned.lower() in ['a', 'b', 'c', 'i', 'x', 'z', 'w', 'f', 'do', 'na', 'za', 'ul']: return False
+        if n_cleaned.lower() in ['a', 'b', 'c', 'i', 'x', 'z', 'w', 'f', 'do', 'na', 'za', 'ul', 'z', 'nr', 'vat', 'pt', 'o', 'r', 'u', 's', 'l', 'g', 'e', 'm', 'p', 'b', 'd', 'k']: return False
         return True
 
     def is_ignorable_line(line):
@@ -254,8 +253,8 @@ def parse_ocr(raw_text):
             'paragon', 'sprzedaż', 'ptu', 'suma', 'suma pln', 'razem', 'kasa', 'kasjer', 'nip',
             'sklep', 'ul.', 'data', 'godzina', 'transakcji', 'fiskalny', 'bdo',
             'dziekujemy', 'zapraszamy', 'nr sys', 'karta', 'platnicza', 'system',
-            'rozliczenie płatności', 'oplata', 'rabat',  # Keep 'rabat' for now, but handle it explicitly later
-            'bądz z biedronką', 'codziennie niskie ceny', 'jeronimo martins'
+            'rozliczenie płatności', 'oplata', 'opodatkowana',
+            'bądz z biedronką', 'codziennie niskie ceny', 'jeronimo martins', 'o.', 'r.', 'nr', 'vat', 'pt'
         ]):
             return True
         # Lines that are mostly digits, or short and meaningless
@@ -276,40 +275,24 @@ def parse_ocr(raw_text):
         print(f"DEBUG: Parsing line: '{line}'")
 
         patterns = [
-            # Główne (istniejące, które są już w kodzie)
-            r'^(.+?)\s+(\d+)\s*[x×X]\s*([0-9]{1,4}[,.]?[0-9]*)\s+([0-9]+[,.]?[0-9]*)',  #
-            r'^(.+?)\s+\|?\s*(\d+)\s*[«x×X*|:]\s*([0-9]+[,.][0-9]+)\s+([0-9]+[,.][0-9]+)',  #
-            r'^(.+?)\s+[ABCćĆ©]?\s*(?:\([^)]*\))?\s*(\d+)\s*[x×X]\s*([0-9]+[,.]?[0-9]*)\s+([0-9]+[,.]?[0-9]*)[ABCćĆ©]?$',
-            #
-            r'^(.+?)\s*(?:\(|\|)?\s*(\d+)\s*[x×X]\s*([0-9]+[,.][0-9]+)\s+([0-9]+[,.][0-9]+)',  #
-            r'^(.+?)\s+(\d+)\s*[x×X]\s*([0-9]+[,.][0-9]+)\s+([0-9]+[,.][0-9]+)',  #
-
-            # NOWE, bardziej elastyczne wzorce:
-
             # 1. Nazwa, Ilość, Cena Jednostkowa, Cena Całkowita (z opcjonalną literą kategorii i/lub nawiasami)
             # Przykład: "Pomidor Maliniowy C 1.986 *6.50 12.39C"
             # Przykład: "PizzKurc Warz 140g C 2 x4,19 8,38C"
-            r'^(.+?)\s+([ABCćĆ©]?)\s*(?:\([^)]*\))?\s*(\d+\s*[x×X*]?\s*[0-9]+[.,]?[0-9]*)\s+([0-9]+[,.]?[0-9]*)[ABCćĆ©]?$',
+            # Przykład: "Dorsz filet XXL b/s F 0,77 x44,90 34 S7C" (qty_unit_price_raw: "0,77 x44,90")
+            r'^(.+?)\s+([ABCćĆ©]?)\s*(?:\([^)]*\))?\s*(\d+[.,]?\d*\s*[x×X*]?\s*[0-9]+[.,]?[0-9]*)\s+([0-9]+[,.]?[0-9]*)[ABCćĆ©]?$',
 
-            # 2. Nazwa, bez ilości, tylko cena całkowita (często na końcu paragonu lub dla pojedynczych pozycji)
-            # Przykład: "Rabart -0,42"
-            # Przykład: "satała naslowa 3.50"
-            r'^(.+?)\s+([0-9]+[,.]?[0-9]{2})[ABCćĆ©]?$',
-
-            # 3. Nazwa z jednostką wagi/objętości, ilość, cena jednostkowa, cena całkowita
+            # 2. Nazwa, Ilość, Cena Jednostkowa, Cena Całkowita (bez litery kategorii, z wagą/objętością w nazwie)
             # Przykład: "MakaronySpaztle 1 x6.99 6.99C"
             # Przykład: "Filety sledz. w sosie 1 x6.89 6.89C"
-            r'^(.+?\s+\d+g|\d+ml|\d+kg|\d+l)\s*([ABCćĆ©]?)\s*(\d+)\s*[x×X]\s*([0-9]+[,.]?[0-9]*)\s+([0-9]+[,.]?[0-9]*)[ABCćĆ©]?$',
+            r'^(.+?(?:\s+\d+g|\d+ml|\d+kg|\d+l)?)\s*(\d+)\s*[x×X*]\s*([0-9]+[,.]?[0-9]*)\s+([0-9]+[,.]?[0-9]*)[ABCćĆ©]?$',
 
-            # 4. Nazwa z ceną po spacjach, bez wyraźnej ilości/mnożnika
-            # Przykład: "CH. F 1 /14.99 14.99"
-            # Przykład: "Kuzkinia luz F 1.738 x8.99 15.62C" - ten jest złapany przez poprzednie, ale dla uproszczenia
-            r'^(?!.*(?:x|\d+\s*[x×X]))(.+?)\s+([0-9]+[,.]?[0-9]{2})$',  # Sprawdza, czy nie ma 'x' ani liczby przed 'x'
+            # 3. Nazwa, bez ilości, tylko cena całkowita (często na końcu paragonu lub dla pojedynczych pozycji)
+            # Przykład: "Rabart -0,42"
+            # Przykład: "satała naslowa 3.50"
+            r'^(?!.*\s(?:\d+\s*[x×X]))(.+?)\s+([0-9]+[,.]?[0-9]{2})[ABCćĆ©]?$',
 
-            # 5. Fallback dla nazw produktów, gdzie cena jest oddzielona wieloma spacjami lub jest na końcu linii
-            # Bardzo ogólny, powinien być na końcu.
+            # 4. Fallback dla nazw produktów, gdzie cena jest oddzielona wieloma spacjami lub jest na końcu linii
             r'^(.+?)\s+([0-9]+[,.]?[0-9]{2})$',
-            r'^(.+?)\s+\(?\s*[\w ]*\)?$'  # Istniejący fallback dla braku cen
         ]
 
         for pattern in patterns:
@@ -317,83 +300,70 @@ def parse_ocr(raw_text):
             match = re.match(pattern, line.strip())
             if match:
                 groups = match.groups()
-                # Logika dla każdego wzorca może być trochę inna w zależności od grup
-                # Tutaj musisz dostosować, które grupy odpowiadają nazwie, ilości, cenie jednostkowej i całkowitej.
-                # Przykład (dla nowego wzorca 1):
-                if pattern == r'^(.+?)\s+([ABCćĆ©]?)\s*(?:\([^)]*\))?\s*(\d+\s*[x×X*]?\s*[0-9]+[.,]?[0-9]*)\s+([0-9]+[,.]?[0-9]*)[ABCćĆ©]?$':
+                # Debugging groups based on pattern
+                # print(f"DEBUG: Pattern '{pattern}' matched. Groups: {groups}")
+
+                if pattern == r'^(.+?)\s+([ABCćĆ©]?)\s*(?:\([^)]*\))?\s*(\d+[.,]?\d*\s*[x×X*]?\s*[0-9]+[.,]?[0-9]*)\s+([0-9]+[,.]?[0-9]*)[ABCćĆ©]?$':
                     name = groups[0].strip()
                     qty_unit_price_raw = groups[2]
                     total_price = normalize_price(groups[3])
 
-                    # Próbuj wydobyć ilość i cenę jednostkową z qty_unit_price_raw
-                    qty_match = re.search(r'(\d+)\s*[x×X*]\s*([0-9]+[.,]?[0-9]*)', qty_unit_price_raw)
+                    # Extract quantity and unit price from qty_unit_price_raw
+                    qty_match = re.search(r'(\d+[.,]?\d*)\s*[x×X*]\s*([0-9]+[.,]?[0-9]*)', qty_unit_price_raw)
                     if qty_match:
-                        quantity = int(qty_match.group(1))
-                        unit_price = normalize_price(qty_match.group(2))
+                        try:
+                            quantity = float(qty_match.group(1).replace(',', '.'))
+                            unit_price = normalize_price(qty_match.group(2))
+                        except ValueError:
+                            quantity = None
+                            unit_price = None
                     else:
                         quantity = None
-                        unit_price = normalize_price(
-                            qty_unit_price_raw)  # Jeśli brak 'x', może to być sama cena jednostkowa
+                        unit_price = None # In this pattern, if no 'x' is found, unit price is likely not present in this format
 
-                    print(
-                        f"DEBUG: NEW PATTERN 1 MATCH! name='{name}', qty={quantity}, unit={unit_price}, total={total_price}")
-                    return name, quantity, unit_price, total_price
-
-                # Przykład (dla nowego wzorca 2 - tylko nazwa i cena całkowita):
-                if pattern == r'^(.+?)\s+([0-9]+[,.]?[0-9]{2})[ABCćĆ©]?$':
-                    name = groups[0].strip()
-                    total_price = normalize_price(groups[1])
-                    print(f"DEBUG: NEW PATTERN 2 MATCH! name='{name}', total={total_price}")
-                    return name, None, None, total_price  # Brak ilości i ceny jednostkowej
-
-                # Przykład (dla nowego wzorca 3 - nazwa z jednostką)
-                if pattern == r'^(.+?\s+\d+g|\d+ml|\d+kg|\d+l)\s*([ABCćĆ©]?)\s*(\d+)\s*[x×X]\s*([0-9]+[,.]?[0-9]*)\s+([0-9]+[,.]?[0-9]*)[ABCćĆ©]?$':
-                    name = groups[0].strip()
-                    quantity = int(groups[2])
-                    unit_price = normalize_price(groups[3])
-                    total_price = normalize_price(groups[4])
-                    print(
-                        f"DEBUG: NEW PATTERN 3 MATCH! name='{name}', qty={quantity}, unit={unit_price}, total={total_price}")
-                    return name, quantity, unit_price, total_price
-
-                # Przykład (dla nowego wzorca 4 i 5 - ogólny nazwa i cena końcowa)
-                if pattern == r'^(?!.*(?:x|\d+\s*[x×X]))(.+?)\s+([0-9]+[,.]?[0-9]{2})$' or \
-                        pattern == r'^(.+?)\s+([0-9]+[,.]?[0-9]{2})$':
-                    name = groups[0].strip()
-                    total_price = normalize_price(groups[1])
-                    print(f"DEBUG: NEW PATTERN 4/5 MATCH! name='{name}', total={total_price}")
-                    return name, None, None, total_price
-
-                # Istniejąca logika dla pozostałych wzorców
-                # Upewnij się, że grupy pasują do `name, quantity, unit_price, total_price`
-                try:
-                    name = groups[0].strip()
-                    if len(groups) >= 4:  # Sprawdza, czy są wszystkie 4 grupy (nazwa, ilość, cena jedn., cena całkowita)
-                        quantity = int(groups[1])
-                        unit_price = normalize_price(groups[2])
-                        total_price = normalize_price(groups[3])
-                        print(
-                            f"DEBUG: EXISTING MATCH! name='{name}', qty={quantity}, unit={unit_price}, total={total_price}")
+                    if is_valid_name(name) and total_price:
+                        print(f"DEBUG: NEW PATTERN 1 MATCH! name='{name}', qty={quantity}, unit={unit_price}, total={total_price}")
                         return name, quantity, unit_price, total_price
-                    elif len(groups) == 2:  # Jeśli tylko nazwa i cena całkowita
-                        total_price = normalize_price(groups[1])
-                        print(f"DEBUG: EXISTING FALLBACK MATCH (name+total)! name='{name}', total={total_price}")
+                    else:
+                        print(f"DEBUG: NEW PATTERN 1 matched but not valid item: name='{name}', total={total_price}")
+                        continue
+
+                elif pattern == r'^(.+?(?:\s+\d+g|\d+ml|\d+kg|\d+l)?)\s*(\d+)\s*[x×X*]\s*([0-9]+[,.]?[0-9]*)\s+([0-9]+[,.]?[0-9]*)[ABCćĆ©]?$':
+                    name = groups[0].strip()
+                    try:
+                        quantity = int(groups[1])
+                    except ValueError:
+                        quantity = None
+                    unit_price = normalize_price(groups[2])
+                    total_price = normalize_price(groups[3])
+                    if is_valid_name(name) and total_price:
+                        print(f"DEBUG: NEW PATTERN 2 MATCH! name='{name}', qty={quantity}, unit={unit_price}, total={total_price}")
+                        return name, quantity, unit_price, total_price
+                    else:
+                        print(f"DEBUG: NEW PATTERN 2 matched but not valid item: name='{name}', total={total_price}")
+                        continue
+
+                elif pattern == r'^(?!.*\s(?:\d+\s*[x×X]))(.+?)\s+([0-9]+[,.]?[0-9]{2})[ABCćĆ©]?$':
+                    name = groups[0].strip()
+                    total_price = normalize_price(groups[1])
+                    if is_valid_name(name) and total_price:
+                        print(f"DEBUG: NEW PATTERN 3 MATCH! name='{name}', total={total_price}")
                         return name, None, None, total_price
-                    else:  # Jeśli tylko nazwa (np. RogalCroissant b0g)
-                        print(f"DEBUG: EXISTING PARTIAL MATCH: name='{name}' (brak ilości/cen)")
-                        return name, None, None, None
-                except (IndexError, ValueError) as e:
-                    print(f"WARNING: Błąd konwersji w istniejącym wzorcu: {e} dla linii '{line}'")
-                    return None, None, None, None  # Zwraca None w przypadku błędu
+                    else:
+                        print(f"DEBUG: NEW PATTERN 3 matched but not valid item: name='{name}', total={total_price}")
+                        continue
+
+                elif pattern == r'^(.+?)\s+([0-9]+[,.]?[0-9]{2})$':
+                    name = groups[0].strip()
+                    total_price = normalize_price(groups[1])
+                    if is_valid_name(name) and total_price:
+                        print(f"DEBUG: NEW PATTERN 4 MATCH! name='{name}', total={total_price}")
+                        return name, None, None, total_price
+                    else:
+                        print(f"DEBUG: NEW PATTERN 4 matched but not valid item: name='{name}', total={total_price}")
+                        continue
 
         print(f"DEBUG: No match for line: '{line}'")
-        # Istniejący fallback
-        fallback_match = re.match(r'^(.+?)\s+([0-9]+[,.][0-9]{2})[ABCćĆ©]?$', fix_common_ocr_mistakes(line))  #
-        if fallback_match:
-            name = fallback_match.group(1).strip()
-            total_price = normalize_price(fallback_match.group(2))
-            print(f"DEBUG: FALLBACK MATCH! name='{name}', total={total_price}")
-            return name, None, None, total_price
         return None, None, None, None
 
     parsed_data["total"] = extract_total(raw_text)
@@ -403,14 +373,7 @@ def parse_ocr(raw_text):
     i = 0
     while i < len(lines):
         line = lines[i].strip()
-        if not line or is_ignorable_line(line):  # Apply new ignorable check
-            i += 1
-            continue
-        if not line or len(line) < 3:
-            i += 1
-            continue
-        # Pomijamy systemowe linie
-        if re.search(r'(PARAGON|SPRZEDAŻ|PTU|SUMA)', line, re.IGNORECASE):
+        if not line or is_ignorable_line(line):
             i += 1
             continue
 
@@ -429,26 +392,45 @@ def parse_ocr(raw_text):
                 item["unit_price"] = str(Decimal(unit_price))
 
             # Rabat – jak wcześniej
-            if i + 1 < len(lines) and i + 2 < len(lines):
+            # Check if there are enough lines ahead to process a discount (current + "rabat" line + price line)
+            if i + 2 < len(lines): # Adjusted to check 2 lines ahead for the price
                 next_line = lines[i + 1].strip()
-                price_line = lines[i + 2].strip()
+                potential_price_line = lines[i + 2].strip()
 
-                if "rabat" in next_line.lower() or next_line.startswith('-'):
-                    clean_rabat_line = re.sub(r'[^\d\-,.]', '', next_line)
-                    rabat_match = re.search(r'-([0-9]+[.,][0-9]{2})', clean_rabat_line)
-                    price_match = re.search(r'^([0-9]+[.,][0-9]{2})[ABCćĆ©]?$', price_line)
+                rabat_match = re.search(r'rabat|zniżka|bon', next_line, re.IGNORECASE)
+                negative_price_match_in_next = re.search(r'-([0-9]+[.,][0-9]{2})', next_line)
+                final_price_match_in_potential_price_line = re.search(r'^([0-9]+[.,][0-9]{2})[ABCćĆ©]?$', potential_price_line)
 
-                    if rabat_match and price_match:
-                        rabat_amount = normalize_price(rabat_match.group(1))
-                        final_price = normalize_price(price_match.group(1))
+                # Prioritize explicit "rabat" keyword or a negative sign in the next line
+                if (rabat_match or negative_price_match_in_next) and final_price_match_in_potential_price_line:
+                    rabat_amount_str = None
+                    if negative_price_match_in_next:
+                        rabat_amount_str = normalize_price(negative_price_match_in_next.group(1))
+                    elif rabat_match: # Try to find discount amount in the same line as "rabat" keyword
+                        rabat_amount_in_rabat_line = re.search(r'([0-9]+[.,][0-9]{2})', next_line)
+                        if rabat_amount_in_rabat_line:
+                            rabat_amount_str = normalize_price(rabat_amount_in_rabat_line.group(1))
 
-                        if rabat_amount and final_price:
-                            item["discount_amount"] = str(Decimal(rabat_amount))
-                            item["original_price"] = item["total_price"]
-                            item["total_price"] = str(Decimal(final_price))
-                            i += 3
-                            items.append(item)
-                            continue
+                    final_price_str = normalize_price(final_price_match_in_potential_price_line.group(1))
+
+                    if rabat_amount_str and final_price_str:
+                        # Ensure the discount makes sense relative to the original price and final price
+                        try:
+                            discount_decimal = Decimal(rabat_amount_str)
+                            final_decimal = Decimal(final_price_str)
+                            original_decimal = Decimal(item["total_price"])
+
+                            # Basic sanity check: original price - discount should approximate final price
+                            if abs((original_decimal - discount_decimal) - final_decimal) < Decimal('0.05'): # Allow for minor OCR errors
+                                item["discount_amount"] = str(discount_decimal)
+                                item["original_price"] = item["total_price"] # Store the price before discount
+                                item["total_price"] = str(final_decimal)
+                                i += 2 # Consume the discount line and the final price line
+                                items.append(item)
+                                i += 1 # Move to the next line after the consumed ones
+                                continue
+                        except Exception as e:
+                            print(f"Error processing discount: {e}")
 
             items.append(item)
 
