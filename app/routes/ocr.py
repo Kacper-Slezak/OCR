@@ -119,7 +119,7 @@ def edit_receipt(receipt_id):
 
             item = {"name": name}
             if quantity:
-                item["quantity"] = int(quantity)
+                item["quantity"] = float(quantity)
             if unit:
                 item["unit_price"] = str(float(unit.replace(",", ".")))
             if total:
