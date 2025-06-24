@@ -52,15 +52,14 @@ def create_app():
     from .routes.main import bp as main_bp
     from .routes.notifications import bp as notif_bp #Dla powiadomień
     from .routes.recipt import recipt_bp
-
+    from .routes import settlements  # <-- DODAJ TEN IMPORT
 
     # Rejestrowanie blueprints w aplikacji
     app.register_blueprint(auth.bp) # Zarejestruj auth blueprint
     app.register_blueprint(ocr.bp)   # Zarejestruj ocr blueprint
     app.register_blueprint(main_bp)
     app.register_blueprint(recipt_bp)
-
-
+    app.register_blueprint(settlements.bp)  #
 
     # Funkcja user_loader dla Flask-Login
     @login_manager.user_loader
