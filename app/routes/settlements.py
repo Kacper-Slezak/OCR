@@ -5,25 +5,38 @@ from flask_login import login_required, current_user
 from app import db  # Importujemy instancję bazy danych
 from app.models import ShoppingList, Settlement, User  # Importujemy potrzebne modele
 from app.services.settlements_services import calculate_settlements  # Importujemy funkcję rozliczania
-
+from collections import defaultdict
+from decimal import Decimal
 bp = Blueprint('settlements', __name__, url_prefix='/settlements')
 
 
 @bp.route('/')
 @login_required
 def settlements_dashboard():
-    """
-    Dashboard rozliczeń - podsumowanie długów i kredytów dla zalogowanego użytkownika.
-    """
     user_id = current_user.id
 
     # Pobieramy bieżące, nierozliczone transakcje, gdzie użytkownik jest dłużnikiem
     my_debts = Settlement.query.filter_by(debtor_id=user_id, is_settled=False).all()
-    # Pobieramy bieżące, nierozliczone transakcje, gdzie użytkownik jest wierzycielem
     my_credits = Settlement.query.filter_by(creditor_id=user_id, is_settled=False).all()
 
-    # Możesz dodać logikę do grupowania długów/kredytów per osoba lub per lista zakupów.
-    # Na razie wyświetlimy je bezpośrednio.
+    # Agregacja do pokazania globalnego salda per osoba
+    global_balances = defaultdict(Decimal)
+
+    for debt in my_debts:
+        global_balances[debt.creditor_id] -= debt.amount
+    for credit in my_credits:
+        global_balances[credit.debtor_id] += credit.amount
+
+    # Konwersja na format do wyświetlenia
+    net_balances_to_show = []
+    for other_user_id, net_amount in global_balances.items():
+        if net_amount != Decimal('0.00'):
+            other_user = User.query.get(other_user_id)
+            net_balances_to_show.append({
+                'user': other_user,
+                'amount': net_amount,
+                'type': 'owes_you' if net_amount > 0 else 'you_owe'
+            })
 
     # Pobieramy listy zakupów, w których użytkownik jest uczestnikiem lub twórcą,
     # aby móc wywołać obliczenia lub zobaczyć status rozliczeń
@@ -46,9 +59,10 @@ def settlements_dashboard():
     sorted_related_lists = sorted(all_related_lists.values(), key=lambda x: x.created_at, reverse=True)
 
     return render_template('settlements/dashboard.html',
-                           my_debts=my_debts,
+                           my_debts=my_debts,  # Nadal możesz wyświetlać szczegóły per transakcja
                            my_credits=my_credits,
-                           related_lists=sorted_related_lists)
+                           related_lists=sorted_related_lists,
+                           net_balances=net_balances_to_show)
 
 
 @bp.route('/list/<int:list_id>/calculate', methods=['POST'])  # Używamy POST dla zmiany stanu

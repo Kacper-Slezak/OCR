@@ -23,7 +23,7 @@ def set_tesseact_path():
 
 def preprocess_image(image_path):
     """
-    NOWA, UPROSZCZONA I BARDZIEJ ROBUSTNA funkcja preprocessingu.
+    Funkcja preprocessingu.
     Skupia się na kluczowych krokach: konwersji do skali szarości,
     binaryzacji i zapewnieniu właściwego formatu (czarny tekst na białym tle).
     """
@@ -34,6 +34,30 @@ def preprocess_image(image_path):
 
         # Krok 1: Konwersja do skali szarości
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+        # NOWY KROK: Automatyczna korekcja orientacji za pomocą Tesseract OSD
+        try:
+            # Spróbuj wykryć orientację obrazu
+            osd_data = pytesseract.image_to_osd(gray)
+            rotation_angle = 0
+
+            # Parsuj wyniki OSD
+            for line in osd_data.split('\n'):
+                if 'Rotate:' in line:
+                    rotation_angle = int(line.split(':')[1].strip())
+                    break
+
+            # Obróć obraz jeśli potrzeba
+            if rotation_angle != 0:
+                (h, w) = gray.shape[:2]
+                center = (w // 2, h // 2)
+                rotation_matrix = cv2.getRotationMatrix2D(center, rotation_angle, 1.0)
+                gray = cv2.warpAffine(gray, rotation_matrix, (w, h),
+                                      flags=cv2.INTER_CUBIC,
+                                      borderMode=cv2.BORDER_REPLICATE)
+                print(f"DEBUG: Skorygowano orientację obrazu o {rotation_angle} stopni.")
+        except Exception as e:
+            print(f"DEBUG: Tesseract OSD nie zadziałał, kontynuuję bez korekcji orientacji: {e}")
 
         # Krok 2 (Opcjonalnie, ale zalecane): Korekcja przekrzywienia (Deskewing)
         # Ta część jest w porządku i warto ją zostawić.
@@ -218,19 +242,21 @@ def parse_ocr(raw_text):
 
     def clean_name(n):
         # Remove common OCR artifacts or noise that might be attached to names
-        n = re.sub(r'[|()©*„”\'`~]', '', n) # Add more common OCR errors
-        n = re.sub(r'\s+[ABCćĆ©]$', '', n) # Remove single category letters at the end
-        n = re.sub(r'\s+\d+x\d+[.,]\d{2}', '', n) # Remove "qty x price" if it got stuck in name
-        n = re.sub(r'\s+\d+[.,]\d{2}$', '', n) # Remove standalone price at the end
-        n = re.sub(r'\s+', ' ', n).strip() # Normalize spaces
+        n = re.sub(r'[|()©*„”\'`~]', '', n)  # Add more common OCR errors
+        n = re.sub(r'\s+[ABCćĆ©]$', '', n)  # Remove single category letters at the end
+        n = re.sub(r'\s+\d+x\d+[.,]\d{2}', '', n)  # Remove "qty x price" if it got stuck in name
+        n = re.sub(r'\s+\d+[.,]\d{2}$', '', n)  # Remove standalone price at the end
+        n = re.sub(r'\s+', ' ', n).strip()  # Normalize spaces
         # Remove numbers that are clearly part of a transaction ID or date at the end of a line
-        n = re.sub(r'\s+\d{4,}$', '', n) # e.g., "Product Name 12345"
+        n = re.sub(r'\s+\d{4,}$', '', n)  # e.g., "Product Name 12345"
         return n
 
     def is_valid_name(n):
-        if not n: return False
+        if not n:
+            return False
         n_cleaned = n.strip()
-        if len(n_cleaned) < 4: return False # Minimum length for a product name
+        if len(n_cleaned) < 4:
+            return False # Minimum length for a product name
         # Check if the name consists mostly of non-alphanumeric characters or only numbers
         letters = len(re.findall(r'[A-Za-zĄĆĘŁŃÓŚŹŻąćęłńóśźż]', n_cleaned))
         digits = len(re.findall(r'\d', n_cleaned))
@@ -250,7 +276,7 @@ def parse_ocr(raw_text):
         line = line.strip().lower()
         # Common receipt headers/footers/metadata
         if any(keyword in line for keyword in [
-            'paragon', 'sprzedaż', 'ptu', 'suma', 'suma pln', 'razem', 'kasa', 'kasjer', 'nip',
+            'paragon', 'sprzedaż','sprzedaz','numer', 'numor', 'ptu', 'suma', 'suma pln', 'razem', 'kasa', 'kasjer', 'nip',
             'sklep', 'ul.', 'data', 'godzina', 'transakcji', 'fiskalny', 'bdo',
             'dziekujemy', 'zapraszamy', 'nr sys', 'karta', 'platnicza', 'system',
             'rozliczenie płatności', 'oplata', 'opodatkowana',
@@ -379,6 +405,11 @@ def parse_ocr(raw_text):
 
         # Parsuj linię produktu
         name, quantity, unit_price, total_price = parse_product_line(line)
+        if total_price is not None:
+            if Decimal(total_price) > Decimal('10000.00'):
+                print(f"WARNING: Skipping item '{name}' with unusually high total price: {total_price}")
+                i += 1
+                continue
 
         if name and total_price:
             item = {
