@@ -20,6 +20,12 @@ shopping_list_participants = db.Table(
     db.Column('shopping_list_id', db.Integer, db.ForeignKey('shopping_list.id'), primary_key=True)
 )
 
+product_assignee_association = db.Table(
+    'product_assignee_association',
+    db.Column('product_id', db.Integer, db.ForeignKey('product.id'), primary_key=True),
+    db.Column('user_id', db.Integer, db.ForeignKey('user.id'), primary_key=True)
+)
+
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -65,7 +71,8 @@ class Product(db.Model):
     name = db.Column(db.String(100), nullable=False)
     price = db.Column(db.Numeric(10, 2), nullable=False)
     shopping_list_id = db.Column(db.Integer, db.ForeignKey('shopping_list.id'), nullable=False)
-    assigned_to = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True) # Kto ma kupić/jest przypisany
+    assigned_to_users = db.relationship('User', secondary=product_assignee_association,
+                                        backref=db.backref('assigned_products_shared', lazy='dynamic'))
     paid_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)     # Kto faktycznie zapłacił
     is_purchased = db.Column(db.Boolean, default=False)
     receipt_id = db.Column(db.Integer, db.ForeignKey('receipt.id'), nullable=True)  # Powiazanie produktu z paragonem
