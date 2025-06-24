@@ -30,3 +30,16 @@ class LoginForm(FlaskForm):
     password = PasswordField('Hasło:', validators=[DataRequired()])
     remember_me = BooleanField('Zapamiętaj mnie')
     submit = SubmitField('Zaloguj się')
+
+# Dla resetowania hasła
+class PasswordResetRequestForm(FlaskForm):
+    email = StringField('Adres e-mail', validators=[DataRequired(), Email()])
+    submit = SubmitField('Wyślij link resetujący')
+
+class PasswordResetForm(FlaskForm):
+    password = PasswordField('Nowe hasło', validators=[DataRequired()])
+    confirm_password = PasswordField(
+        'Potwierdź hasło',
+        validators=[DataRequired(), EqualTo('password', message='Hasła muszą być takie same')]
+    )
+    submit = SubmitField('Resetuj hasło')
