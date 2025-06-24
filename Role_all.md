@@ -6,34 +6,38 @@
     - [x] Stworzenie formularza `RegistrationForm` w `app/forms.py` (username, email, password, confirm_password).
     - [x] Stworzenie formularza `LoginForm` w `app/forms.py` (email/username, password, remember_me).
     - [x] Dodanie walidacji (np. unikalność username/email, długość hasła, zgodność haseł) do formularzy WTForms.
-- [ ] **Trasy autentykacji:**
+- [x] **Trasy autentykacji:**
     - [x] Utworzenie pliku `auth.py` w `app/routes/`.
-    - [ ] Zaimplementowanie trasy `GET/POST /register` w `auth.py`: obsługa formularza, hashowanie hasła (za pomocą `bcrypt`), dodawanie użytkownika do DB.
-    - [ ] Zaimplementowanie trasy `GET/POST /login` w `auth.py`: weryfikacja danych, logowanie użytkownika (`login_user` z Flask-Login).
-    - [ ] Zaimplementowanie trasy `GET /logout` w `auth.py`: wylogowanie użytkownika (`logout_user`).
+    - [x] Zaimplementowanie trasy `GET/POST /register` w `auth.py`: obsługa formularza, hashowanie hasła (za pomocą `bcrypt`), dodawanie użytkownika do DB.
+    - [x] Zaimplementowanie trasy `GET/POST /login` w `auth.py`: weryfikacja danych, logowanie użytkownika (`login_user` z Flask-Login).
+    - [x] Zaimplementowanie trasy `GET /logout` w `auth.py`: wylogowanie użytkownika (`logout_user`).
 - [ ] **Szablony autentykacji:**
-    
-    - [ ] Stworzenie katalogu `auth/` w `app/templates/`.
+    - [x] Stworzenie katalogu `auth/` w `app/templates/`.
     - [ ] Zaprojektowanie `base.html` z podstawową strukturą HTML, linkami do Bootstrap 5 i blokami `content`, `scripts`.
-    - [ ] Stworzenie szablonów `auth/register.html` i `auth/login.html` dziedziczących z `base.html`, wykorzystujących Bootstrap 5 do stylizacji formularzy.
-    - [ ] Wyświetlanie **komunikatów flash** (Flask `flash` messages) w `base.html`.
+    - [x] Stworzenie szablonów `auth/register.html` i `auth/login.html` dziedziczących z `base.html`, wykorzystujących Bootstrap 5 do stylizacji formularzy.
+    - [x] Wyświetlanie **komunikatów flash** (Flask `flash` messages) w `base.html`.
 - [ ] **Logowanie użytkownika i strona główna:**
-    
     - [ ] Stworzenie trasy `GET /` w `app/routes/shopping.py` lub `app/routes/__init__.py`, która przekieruje zalogowanego użytkownika do Strony głównej.
-    - [ ] Użycie dekoratora `@login_required` do ochrony widoków wymagających zalogowania.
-    - [ ] Współpraca z Tymonem w przygotowaniu Strony głównej 
+    - [x] Użycie dekoratora `@login_required` do ochrony widoków wymagających zalogowania.
+    - [ ] Współpraca z Tymonem w przygotowaniu Strony głównej
 
-### Etap 2: OCR i skanowanie paragonów - Upload i Podgląd
+### Etap 2: Parada smoka
 
-- [ ] **Trasy do upload'u paragonów:**
-    - [ ] Utworzenie pliku `ocr.py` w `app/routes/`.
-    - [ ] Zaimplementowanie trasy `GET/POST /ocr/upload` w `ocr.py`.
-    - [ ] Obsługa przesłanego pliku: **walidacja typu pliku** (obraz), **bezpieczne zapisywanie pliku** w `app/static/uploads/` (z wykorzystaniem `werkzeug.utils.secure_filename`).
-    - [ ] Zapisanie ścieżki do pliku i metadanych do **modelu `Receipt`** 
-- [ ] **UI do upload'u paragonów:**
-    - [ ] Stworzenie szablonu `ocr/upload.html` z formularzem do przesyłania plików.
-    - [ ] Dodanie ProgressBar/Spinner (JavaScript) dla wizualizacji uploadu, jeśli czas pozwoli.
+-[x] **Wizualizacja smoka:**
+- [x] Dodanie zdjęcia smoka w strukturze projektu
+- [x] Wprowadzenie ruchu smoka
 
+### Etap 3: Wykresy i widoki do rozliczeń
+- [ ] **Widoki rozliczeń:**
+    - [x] Stworzenie katalogu `settlements/` w `app/templates/`.
+    - [x] Zaprojektowanie `settlements/dashboard.html` z jasnym podsumowaniem "Kto komu ile jest winien".
+    - [ ] Zaprojektowanie `settlements/history.html` z tabelą historycznych rozliczeń.
+- [ ] **Wykresy i statystyki:**
+    - [x] Osadzenie biblioteki **Chart.js** w `base.html` lub w dedykowanym pliku JS w `app/static/js/`.
+    - [ ] Napisanie skryptów JavaScript w `app/static/js/` do renderowania wykresów:
+        - [ ] Wykres słupkowy podsumowujący wydatki na listach.
+        - [ ] Wykres kołowy dla proporcji długów/kredytów.
+    - [ ] Integracja danych z backendu (poprzez AJAX requests do API lub wbudowane dane w Jinja2 templates) z wykresami Chart.js.
 ---
 
 ## Tymon: Rozliczenia + Główna strona + Dodawanie list + listy (interfejs) + wykresy
@@ -75,16 +79,6 @@
     - [ ] Zaimplementowanie trasy `GET /settlements/list/<int:id>/calculate` (wywołanie algorytmu rozliczania dla konkretnej listy).
     - [ ] Zaimplementowanie trasy `POST /settlements/settle/<int:id>` (oznaczanie pojedynczego rozliczenia jako opłaconego).
     - [ ] Zaimplementowanie trasy `GET /settlements/history` (historia wszystkich rozliczeń użytkownika).
-- [ ] **Widoki rozliczeń:**
-    - [ ] Stworzenie katalogu `settlements/` w `app/templates/`.
-    - [ ] Zaprojektowanie `settlements/dashboard.html` z jasnym podsumowaniem "Kto komu ile jest winien".
-    - [ ] Zaprojektowanie `settlements/history.html` z tabelą historycznych rozliczeń.
-- [ ] **Wykresy i statystyki:**
-    - [ ] Osadzenie biblioteki **Chart.js** w `base.html` lub w dedykowanym pliku JS w `app/static/js/`.
-    - [ ] Napisanie skryptów JavaScript w `app/static/js/` do renderowania wykresów:
-        - [ ] Wykres słupkowy podsumowujący wydatki na listach.
-        - [ ] Wykres kołowy dla proporcji długów/kredytów.
-    - [ ] Integracja danych z backendu (poprzez AJAX requests do API lub wbudowane dane w Jinja2 templates) z wykresami Chart.js.
 
 ---
 
@@ -200,6 +194,16 @@
     - [ ] Zapisanie skorygowanych danych do bazy danych.
     - [ ] Opcjonalnie: Zaimplementowanie tras `POST /ocr/receipt/<int:id>/assign` do przypisywania produktów z paragonu do listy zakupów i konkretnych użytkowników.
 
+### Etap 3: OCR i skanowanie paragonów - Upload i Podgląd
+
+- [x] **Trasy do upload'u paragonów:**
+    - [x] Utworzenie pliku `ocr.py` w `app/routes/`.
+    - [x] Zaimplementowanie trasy `GET/POST /ocr/upload` w `ocr.py`.
+    - [x] Obsługa przesłanego pliku: **walidacja typu pliku** (obraz), **bezpieczne zapisywanie pliku** w `app/static/uploads/` (z wykorzystaniem `werkzeug.utils.secure_filename`).
+    - [x] Zapisanie ścieżki do pliku i metadanych do **modelu `Receipt`** 
+- [ ] **UI do upload'u paragonów:**
+    - [ ] Stworzenie szablonu `ocr/upload.html` z formularzem do przesyłania plików.
+    - [ ] Dodanie ProgressBar/Spinner (JavaScript) dla wizualizacji uploadu, jeśli czas pozwoli.
 ---
 
 ## Dodatkowe Zadania dla Zespołu:
