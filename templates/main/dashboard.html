@@ -3,32 +3,32 @@
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
-    <h1 class="title">Your Dashboard</h1>
-    <div class="new_recipt">
-        <form method="POST" enctype="multipart/form-data">
-        <input type="file" name="file" accept="image/*">
-        <input type="submit" value="Upload">
-    </form>
-    </div>
-    <div class = "content">
+    <h1 class="title">Moje listy zakupów</h1>
+
+    <div class="content">
+        <!-- Button to create a new list - should trigger a GET request -->
+        <a href="{{ url_for('receipt.edit_shopping_list') }}" class="btn btn-outline-dark">Stwórz nową listę</a>
+
         {% if lists|length < 1 %}
-        <h4>No lists</h4>
+        <h4>Brak list</h4>
         {% else %}
-        <h4>Lists:</h4>
+        <h4>Twoje listy:</h4>
         <table>
             <tr>
-                <th>List</th>
-                <th>Date</th>
-                <th>Ownership</th>
-                <th>Details</th>
+                <th>Nazwa Listy</th>
+                <th>Data Utworzenia</th>
+                <th>Działania</th>
             </tr>
             {% for list in lists %}
                 <tr>
-                    <td>{{ list.name }}</td>
-                    <td>{{ list.created_at }}</td>
-                    <td>{{ list.created_by }}</td>
+                    <td>{{ list.name if list.name else 'Bez nazwy' }}</td> {# Assuming 'name' field exists, otherwise 'Bez nazwy' #}
+                    <td>{{ list.upload_date.strftime('%Y-%m-%d %H:%M') if list.upload_date else 'Brak daty' }}</td>
                     <td>
-                        <a href="/recipt/<int:receipt_id>">details</a>
+                        <!-- Link to edit an existing list -->
+                        <a href="{{ url_for('receipt.edit_shopping_list', list_id=list.id) }}">
+                            <button type="button" class="btn btn-outline-dark">Edytuj</button>
+                        </a>
+                        {# You might also want a delete button here #}
                     </td>
                 </tr>
             {% endfor %}

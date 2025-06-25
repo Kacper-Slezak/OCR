@@ -10,12 +10,13 @@ import json # do obsługi json
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+db.ForeignKey('user.id', name='fk_product_user_id')
 
-# Tabela asocjacyjna dla relacji Many-to-Many między User a ShoppingList (uczestnicy)
-shopping_list_participants = db.Table(
-    'shopping_list_participants',
-    db.Column('user_id', db.Integer, db.ForeignKey('user.id'), primary_key=True),
-    db.Column('shopping_list_id', db.Integer, db.ForeignKey('shopping_list.id'), primary_key=True)
+# Tabela asocjacyjna dla relacji Many-to-Many między Product a Friend
+product_friend_association = db.Table(
+    'product_friend_association',
+    db.Column('product_id', db.Integer, db.ForeignKey('product.id'), primary_key=True),
+    db.Column('friend_id', db.Integer, db.ForeignKey('friend.id'), primary_key=True)
 )
 
 # Tabela asocjacyjna dla relacji Many-to-Many między Product a User (kto jest przypisany do produktu)
@@ -44,7 +45,7 @@ class User(db.Model, UserMixin):
     debtor_settlements = db.relationship('Settlement', backref='debtor', lazy='dynamic', foreign_keys='Settlement.debtor_id')
     creditor_settlements = db.relationship('Settlement', backref='creditor', lazy='dynamic', foreign_keys='Settlement.creditor_id')
     uploaded_receipts = db.relationship('Receipt', backref='uploader', lazy='dynamic')
-    participated_shopping_lists = db.relationship('ShoppingList', secondary=shopping_list_participants, backref=db.backref('participants', lazy='dynamic'))
+    #participated_shopping_lists = db.relationship('ShoppingList', secondary=shopping_list_participants, backref=db.backref('participants', lazy='dynamic'))
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -76,9 +77,12 @@ class Product(db.Model):
     price = db.Column(db.Numeric(10, 2), nullable=False)
     shopping_list_id = db.Column(db.Integer, db.ForeignKey('shopping_list.id'), nullable=False)
 
-    # Zmodyfikowana relacja Many-to-Many dla przypisanych użytkowników
-    # Zmieniamy nazwę relacji na 'product_assignees' (unikalna)
-    # Używamy back_populates, aby połączyć ją z relacją 'assigned_products_m2m' w modelu User.
+    # Nowa relacja do znajomych przypisanych do produktu
+    assigned_friends = db.relationship(
+        'Friend',
+        secondary=product_friend_association,
+        back_populates='assigned_products'
+    )
     product_assignees = db.relationship('User', secondary=product_assignee_association, back_populates='assigned_products_m2m')
 
     paid_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)     # Kto faktycznie zapłacił
@@ -130,3 +134,18 @@ class Receipt(db.Model):
 
     def __repr__(self):
         return f'<Receipt {self.id} - {self.status}>'
+
+class Friend(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(120), nullable=False)
+
+    # Relacja z produktami – wiele do wielu
+    assigned_products = db.relationship(
+        'Product',
+        secondary=product_friend_association,
+        back_populates='assigned_friends'
+    )
+
+    def __repr__(self):
+        return f'<Friend {self.name} - {self.email}>'
