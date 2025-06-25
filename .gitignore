@@ -17,4 +17,4 @@ migrations
 *.sublime-workspace
 .vscode/
 uploads/
-
+test.py
