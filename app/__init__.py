@@ -63,20 +63,18 @@ def create_app():
 
 
     from .routes.main import bp as main_bp
-    from .routes.notifications import bp as notif_bp #Dla powiadomień
     from .routes.receipt import receipt_bp
     from .routes import settlements  # <-- DODAJ TEN IMPORT
-
+    from app.routes.notifications import notifications_bp
     # Rejestrowanie blueprints w aplikacji
     app.register_blueprint(auth.bp) # Zarejestruj auth blueprint
     app.register_blueprint(ocr.bp)   # Zarejestruj ocr blueprint
     app.register_blueprint(main_bp)
 
-    app.register_blueprint(recipt_bp)
+    app.register_blueprint(receipt_bp)
     app.register_blueprint(settlements.bp)  #
 
     # Rejestracja blueprintu powiadomień
-    from app.routes.notifications import notifications_bp
     app.register_blueprint(notifications_bp)
 
     # Harmonogram wysyłania wiadomości przypomniających

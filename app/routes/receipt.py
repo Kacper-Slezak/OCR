@@ -88,7 +88,7 @@ def save_shopping_list():
             flash('Lista zakupów została zaktualizowana!', 'success')
         else:
             flash('Błąd: Nie znaleziono listy do aktualizacji lub nie masz do niej dostępu.', 'error')
-            return redirect(url_for('recipt.edit_shopping_list')) # Przekieruj na stronę tworzenia nowej listy
+            return redirect(url_for('receipt.edit_shopping_list')) # Przekieruj na stronę tworzenia nowej listy
     else:
         # Tworzenie nowej listy
         new_list = Receipt(user_id=current_user.id, processed_data=products_data)
@@ -99,57 +99,9 @@ def save_shopping_list():
     # Po zapisaniu, możesz przekierować użytkownika z powrotem do edycji listy (jeśli istnieje)
     # lub na ogólną stronę z listami. Tutaj przekierowuję na stronę główną blueprintu.
     if list_id:
-        return redirect(url_for('recipt.edit_shopping_list', list_id=list_id))
+        return redirect(url_for('receipt.edit_shopping_list', list_id=list_id))
     else:
         # Jeśli to była nowa lista, możesz przekierować do jej edycji z nowym ID
         # (co wymagałoby odświeżenia obiektu new_list, żeby poznać jego ID)
         # Lub po prostu na ogólną stronę /lists_edition/
-        return redirect(url_for('recipt.edit_shopping_list'))
-
-
-# --- Poniżej znajdują się potrzebne importy i inicjalizacja w Twoim głównym pliku aplikacji (np. app/__init__.py) ---
-# from flask import Flask
-# from flask_sqlalchemy import SQLAlchemy
-# from flask_login import LoginManager, UserMixin
-# from your_blueprint_file import recipt_bp # Nazwa pliku, gdzie zdefiniowano Blueprint
-
-# db = SQLAlchemy()
-# login_manager = LoginManager()
-
-# class User(UserMixin, db.Model):
-#     id = db.Column(db.Integer, primary_key=True)
-#     username = db.Column(db.String(80), unique=True, nullable=False)
-#     # ... inne pola
-#
-# class Receipt(db.Model):
-#     id = db.Column(db.Integer, primary_key=True)
-#     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-#     # processed_data może być typu JSON dla SQLite/PostgreSQL, lub Text dla MySQL z json.dumps/loads
-#     processed_data = db.Column(db.JSON)
-#     # Dodatkowo, jeśli chcesz śledzić datę utworzenia/modyfikacji
-#     upload_date = db.Column(db.DateTime, default=db.func.current_timestamp())
-#
-#     def get_processed_data(self):
-#         # Jeśli processed_data nie jest natywnym typem JSON, musisz parsować:
-#         # return json.loads(self.processed_data) if self.processed_data else {}
-#         return self.processed_data # Jeśli jest natywnym typem JSON
-#
-# @login_manager.user_loader
-# def load_user(user_id):
-#     return User.query.get(int(user_id))
-#
-# def create_app():
-#     app = Flask(__name__)
-#     app.config['SECRET_KEY'] = 'your_secret_key' # Zmień na silny klucz!
-#     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///your_database.db'
-#     db.init_app(app)
-#     login_manager.init_app(app)
-#     login_manager.login_view = 'auth.login' # Załóżmy, że masz blueprint 'auth'
-#
-#     app.register_blueprint(recipt_bp)
-#     # app.register_blueprint(auth_bp) # Zarejestruj inne blueprinty
-#
-#     with app.app_context():
-#         db.create_all() # Tworzy tabele w bazie danych
-#
-#     return app
+        return redirect(url_for('receipt.edit_shopping_list'))
