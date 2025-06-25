@@ -2,6 +2,7 @@
 app/static/uploads/
 .env
 /app.db
+instance/app.db
 venv
 app/__pycache__
 app/routes/__pycache__
