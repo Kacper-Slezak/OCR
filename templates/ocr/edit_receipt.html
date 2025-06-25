@@ -18,6 +18,14 @@
     <form method="POST" action="{{ url_for('ocr.edit_receipt', receipt_id=receipt.id) }}">
         <h4>Produkty:</h4>
         <div id="products-container">
+        <div class="row fw-bold mb-2 ms-2">
+            <div class="col-md-3">Nazwa produktu</div>
+            <div class="col-md-1">Ilość</div>
+            <div class="col-md-2">Cena jedn.</div>
+            <div class="col-md-2">Cena całk.</div>
+            <div class="col-md-2">Rabat</div>
+            <div class="col-md-2">Akcje</div>
+        </div>
             {% if processed_products %}
                 {% for product in processed_products %}
                     <div class="product-item border p-3 mb-3 rounded shadow-sm">

@@ -1,4 +1,5 @@
 from flask_wtf import FlaskForm
+from pyexpat.errors import messages
 from wtforms import StringField, PasswordField, SubmitField, BooleanField
 from wtforms.validators import DataRequired, Length, Email, EqualTo, ValidationError
 
@@ -9,8 +10,7 @@ class RegistrationForm(FlaskForm):
     username = StringField('Nazwa użytkownika:', validators=[DataRequired(), Length(min=2, max=15)])
     email = StringField('Email:', validators=[DataRequired(), Email(), Length(min=4)]) # Dodano Email() validator
     password = PasswordField('Hasło:', validators=[DataRequired(), Length(min=8)])
-    # Poprawka: Literówka w EqualTo - 'passwword' -> 'password'
-    confirm_password = PasswordField('Potwierdź hasło:', validators=[DataRequired(), EqualTo('password')])
+    confirm_password = PasswordField('Potwierdź hasło:', validators=[DataRequired(), EqualTo('password', message='Hasło musi być takie same!')])
     submit = SubmitField('Zarejestruj się')
 
     # Metody walidujące MUSZĄ być wewnątrz klasy formularza

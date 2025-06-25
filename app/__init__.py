@@ -63,14 +63,17 @@ def create_app():
 
 
     from .routes.main import bp as main_bp
-    from .routes.recipt import recipt_bp
-
+    from .routes.notifications import bp as notif_bp #Dla powiadomień
+    from .routes.receipt import receipt_bp
+    from .routes import settlements  # <-- DODAJ TEN IMPORT
 
     # Rejestrowanie blueprints w aplikacji
     app.register_blueprint(auth.bp) # Zarejestruj auth blueprint
     app.register_blueprint(ocr.bp)   # Zarejestruj ocr blueprint
     app.register_blueprint(main_bp)
+
     app.register_blueprint(recipt_bp)
+    app.register_blueprint(settlements.bp)  #
 
     # Rejestracja blueprintu powiadomień
     from app.routes.notifications import notifications_bp
@@ -81,12 +84,11 @@ def create_app():
     scheduler.add_job(
         func=wyslij_przypomnienia_dluznikom,
         trigger='cron',
-        hour=9,      # каждый день в 09:00 UTC
+        hour=9,
         minute=0,
         id='przypomnienia_dluznikom'
     )
     scheduler.start()
-
 
 
     # Funkcja user_loader dla Flask-Login
