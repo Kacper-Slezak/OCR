@@ -15,4 +15,4 @@ __pycache__/
 *.sublime-workspace
 .vscode/
 uploads/
-
+test.py

@@ -6,7 +6,6 @@ from flask_mail import Message
 from jinja2 import Template
 from email_validator import validate_email, EmailNotValidError
 
-# Импорт расширений и моделей
 from app import db, mail
 from app.models import User, Receipt, Settlement
 

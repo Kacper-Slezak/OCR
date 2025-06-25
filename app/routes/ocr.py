@@ -1,11 +1,13 @@
 # app/routes/ocr.py
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, abort, send_from_directory
+from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, abort, send_from_directory, Response
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 import os
 
+import csv
+from io import StringIO
 from app import db
-from app.models import Receipt
+from app.models import Receipt, Product, User
 
 # Importujemy funkcje z Twojego serwisu OCR
 from app.services.ocr_services import process_receipt_image
@@ -196,3 +198,72 @@ def view_image(filename):
         abort(404)
 
     return send_from_directory(current_app.config['UPLOAD_FOLDER'], filename_secured)
+
+@bp.route('/receipts/<int:receipt_id>/export.csv')
+@login_required
+def export_receipt(receipt_id):
+    """
+    Eksportuje pojedynczy paragon na podstawie OCR-owych danych
+    (parsed_data = receipt.get_processed_data()).
+    Kolumny: Id, Imię użytkownika, Email, Nazwa produktu, Ilość, Cena jednostkowa, Łączna cena, Rabat, Data paragonu, Status
+    """
+    rec = Receipt.query.get_or_404(receipt_id)
+    user = User.query.get(rec.user_id)
+    parsed = rec.get_processed_data() or {}
+
+    items = []
+    # Если format {"items": [...], "total":.., "date":..}
+    if isinstance(parsed, dict) and 'items' in parsed:
+        items = parsed['items']
+        receipt_date = parsed.get('date', '')
+    # Если старый формат — список
+    elif isinstance(parsed, list):
+        items = parsed
+        receipt_date = ''
+    else:
+        # нет данных
+        items = []
+        receipt_date = ''
+
+    si = StringIO()
+    writer = csv.writer(si)
+
+    # заголовок
+    writer.writerow([
+        'Id',
+        'Imię użytkownika',
+        'Email',
+        'Nazwa produktu',
+        'Ilość',
+        'Cena jednostkowa',
+        'Łączna cena',
+        'Rabat',
+        'Data paragonu',
+        'Status'
+    ])
+
+    # одна строка на каждый товар
+    for it in items:
+        writer.writerow([
+            rec.id,
+            user.username if user else '',
+            user.email if user else '',
+            it.get('name', ''),
+            it.get('quantity', ''),
+            it.get('unit_price', ''),
+            it.get('total_price', ''),
+            it.get('discount_amount', ''),
+            receipt_date,
+            rec.status
+        ])
+
+    output = si.getvalue()
+    return Response(
+        output,
+        mimetype='text/csv',
+        headers={
+            'Content-Disposition':
+                f'attachment; filename=receipt_{rec.id}.csv'
+        }
+    )
+
