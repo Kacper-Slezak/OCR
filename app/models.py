@@ -3,7 +3,7 @@ from datetime import datetime
 from app import db, login_manager
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-import json # do obsługi json
+import json
 
 
 @login_manager.user_loader
@@ -100,7 +100,7 @@ class Settlement(db.Model):
     amount = db.Column(db.Numeric(10, 2), nullable=False)
     is_settled = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.now)
-    settled_at = db.Column(db.DateTime, nullable=True) # Data uregulowania
+    settled_at = db.Column(db.DateTime, nullable=True)  # Data uregulowania
 
     # Indeksy dla szybszych zapytań (opcjonalne, ale zalecane dla kluczy obcych)
     __table_args__ = (
@@ -117,9 +117,9 @@ class Receipt(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     file_path = db.Column(db.String(255), nullable=False)
     upload_date = db.Column(db.DateTime, default=datetime.now)
-    status = db.Column(db.String(50), default='uploaded') # Status przetwarzania: 'uploaded', 'processing', 'processed', 'error'
-    raw_text = db.Column(db.Text, nullable=True) # Surowy tekst z OCR
-    processed_data = db.Column(db.Text, nullable=True) # Sparsowane dane w formacie JSON jako string
+    status = db.Column(db.String(50), default='uploaded')  # Status przetwarzania: 'uploaded', 'processing', 'processed', 'error'
+    raw_text = db.Column(db.Text, nullable=True)  # Surowy tekst z OCR
+    processed_data = db.Column(db.Text, nullable=True)  # Sparsowane dane w formacie JSON jako string
 
     # Relacja: Paragon może mieć wiele produktów (jeśli Product ma receipt_id)
     products_from_receipt = db.relationship('Product', backref='source_receipt', lazy='dynamic', cascade='all, delete-orphan')
