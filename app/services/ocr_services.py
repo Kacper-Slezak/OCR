@@ -35,7 +35,7 @@ def preprocess_image(image_path):
         # Krok 1: Konwersja do skali szarości
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-        # NOWY KROK: Automatyczna korekcja orientacji za pomocą Tesseract OSD
+        # Automatyczna korekcja orientacji za pomocą Tesseract OSD
         try:
             # Spróbuj wykryć orientację obrazu
             osd_data = pytesseract.image_to_osd(gray)
@@ -59,8 +59,7 @@ def preprocess_image(image_path):
         except Exception as e:
             print(f"DEBUG: Tesseract OSD nie zadziałał, kontynuuję bez korekcji orientacji: {e}")
 
-        # Krok 2 (Opcjonalnie, ale zalecane): Korekcja przekrzywienia (Deskewing)
-        # Ta część jest w porządku i warto ją zostawić.
+        # Krok 3: Korekcja przekrzywienia (Deskewing)
         try:
             coords = np.column_stack(np.where(gray > 0))
             angle = cv2.minAreaRect(coords)[-1]
@@ -78,13 +77,13 @@ def preprocess_image(image_path):
         except Exception as e:
             print(f"WARNING: Nie udało się skorygować przekrzywienia: {e}")
 
-        # Krok 3: Binaryzacja z metodą Otsu - ZNACZNIE LEPSZA NIŻ POPRZEDNIA METODA
+        # Krok 4: Binaryzacja z metodą Otsu - ZNACZNIE LEPSZA NIŻ POPRZEDNIA METODA
         # Metoda Otsu automatycznie znajduje najlepszy próg do oddzielenia tekstu od tła.
         # Jest to o wiele bardziej niezawodne niż skomplikowana kaskada filtrów.
         thresh_value, thresh_image = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         print(f"DEBUG: Użyto progu Otsu o wartości: {thresh_value}")
 
-        # Krok 4: Zapewnienie, że tekst jest czarny na białym tle (NAJWAŻNIEJSZE!)
+        # Krok 5: Zapewnienie, że tekst jest czarny na białym tle (NAJWAŻNIEJSZE!)
         # Tesseract działa najlepiej w tym trybie. Musimy sprawdzić, czy tło jest białe.
         # Obliczamy średni kolor. Jeśli jest bliższy czerni (0) niż bieli (255), tło jest czarne.
         if np.mean(thresh_image) < 128:
@@ -136,7 +135,6 @@ def run_ocr(image_path):
             '--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzĄĆĘŁŃÓŚŹŻąćęłńóśźż.,:-+/()%|[]{}',
             '--oem 3 --psm 4',
             '--oem 3 --psm 6',
-            '--oem 1 --psm 6'
         ]
 
         best_result = ""
