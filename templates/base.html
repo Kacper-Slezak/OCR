@@ -56,9 +56,9 @@
             <nav>
                 <ul class="nav justify-content-center">
                     {% if current_user.is_authenticated %}
-                        <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('main.dashboard') }}">Main</a></li>
-                        <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('ocr.list_receipts') }}">Moje Paragony</a></li>
-                        <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('ocr.upload_receipt') }}">Prześlij Paragon</a></li>
+                        <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('main.dashboard') }}">Listy zakupów</a></li>
+                        <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('receipt.lists_edition') }}">Dodaj listę</a></li>
+                        <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('ocr.list_receipts') }}">Paragony</a></li>
                         <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('auth.logout') }}">Wyloguj ({{ current_user.username }})</a></li>
                     {% else %}
                         <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('auth.login') }}">Zaloguj</a></li>
@@ -90,6 +90,7 @@
     <footer class="bg-dark text-white text-center py-3 mt-4">
         &copy; 2025 Nasza Aplikacja OCR
     </footer>
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
