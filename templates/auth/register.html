@@ -1,8 +1,8 @@
 {% extends 'base.html' %}
 {% block title %}Register{% endblock %}
 {% block content %}
-  <h2>Register</h2>
-  <form method="POST">
+  <h2>Rejestracja</h2>
+  <form method="POST" action="{{ url_for('auth.register') }}">
       {{ form.hidden_tag() }}
       <div class="mb-3">
           {{ form.username.label }}
@@ -15,11 +15,17 @@
       <div class="mb-3">
           {{ form.password.label }}
           {{ form.password(class="form-control") }}
+          {% for error in form.password.errors %}
+            <div class="text-danger">{{ error }}</div>
+          {% endfor %}
       </div>
       <div class="mb-3">
           {{ form.confirm_password.label }}
           {{ form.confirm_password(class="form-control") }}
+          {% for error in form.confirm_password.errors %}
+            <div class="text-danger">{{ error }}</div>
+          {% endfor %}
       </div>
-      <button type="submit" class="btn btn-primary">Register</button>
+      <button type="submit" class="btn btn-outline-dark">Zarejestruj się</button>
   </form>
 {% endblock %}

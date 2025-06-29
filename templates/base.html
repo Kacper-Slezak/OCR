@@ -3,52 +3,107 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Splitit?{% endblock %}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
-    {# TODO <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"> #}
+    <title>{% block title %}Nasza Aplikacja{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+          html, body {
+            height: 100%;
+          }
+
+          body {
+            display: flex;
+            flex-direction: column;
+          }
+
+          main {
+            flex: 1;
+          }
+          .dragon {
+          position: absolute;
+          top: 0;
+          left: 0;
+          height: 120px;
+          width: auto;
+          z-index: 9999;
+          animation: fly-diagonal 3s linear 1;
+          animation-fill-mode: forwards;
+          pointer-events: none;
+          }
+
+          @keyframes fly-diagonal {
+          0% {
+          top: 0;
+          left: 0;
+          opacity: 1;
+          }
+          100% {
+          top: 80vh;
+          left: 85vw;
+          opacity: 1;
+          }
+          }
+    </style>
+
 </head>
-<body>
-    <header>
-        <h1>Splitit?</h1>
-        <nav>
-            <ul>
-                {% if current_user.is_authenticated %}
-                    <li><a href="{{ url_for('main.dashboard') }}">Home</a></li>
-                    <li><a href="{{ url_for('auth.logout') }}">Wyloguj ({{ current_user.username }})</a></li>
-                {% else %}
-                    <li><a href="{{ url_for('auth.login') }}">Zaloguj</a></li>
-                    <li><a href="{{ url_for('auth.register') }}">Zarejestruj</a></li>
-                {% endif %}
-            </ul>
-        </nav>
-        <hr>
+<body class="bg-light">
+    <header class="bg-dark text-white py-3 mb-4">
+        <div class="container">
+            <div class="d-flex justify-content-center">
+                <h1 class="h3 mb-0">Nasza Aplikacja OCR</h1>
+            </div>
+            <div class="bg-light mt-3 mb-2" style="height: 1px;"></div>
+            <nav>
+                <ul class="nav justify-content-center">
+                    {% if current_user.is_authenticated %}
+                        <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('main.dashboard') }}">Main</a></li>
+                        <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('ocr.list_receipts') }}">Moje Paragony</a></li>
+                        <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('ocr.upload_receipt') }}">Prześlij Paragon</a></li>
+                        <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('auth.logout') }}">Wyloguj ({{ current_user.username }})</a></li>
+                    {% else %}
+                        <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('auth.login') }}">Zaloguj</a></li>
+                        <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('auth.register') }}">Zarejestruj</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
     </header>
 
-    <main>
-        {# Wyświetlanie komunikatów Flash - WAŻNE! #}
-        {# CZEMU TAKIE WAŻNE? #}
+    <main class="container">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
-                <div class="flashes">
+                <div class="mt-3">
                     {% for category, message in messages %}
-                        <div class="alert alert-{{ category }}"> {# Możesz użyć klas Bootstrap dla stylizacji #}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
                             {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+
                         </div>
                     {% endfor %}
                 </div>
             {% endif %}
         {% endwith %}
 
-        {% block content %}{% endblock %} {# <--- TO JEST KLUCZOWY ELEMENT! #} {# OK CHAT #} {# MA RACJE THO #}
+        {% block content %}{% endblock %}
     </main>
 
-    <footer>
-        <p>&copy; 2025 Splitit?</p>
+    <footer class="bg-dark text-white text-center py-3 mt-4">
+        &copy; 2025 Nasza Aplikacja OCR
     </footer>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    {# Tutaj możesz dodać linki do skryptów JavaScript, np. Bootstrap JS #}
-    {# <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script> #}
-    {# <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script> #}
-    {# <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script> #}
+    <img src="{{ url_for('static', filename='szczerbatek.png') }}"
+     id="dragon"
+     class="dragon"
+     alt="Latający smok">
+
+    <script>
+      const dragon = document.getElementById("dragon");
+
+      dragon.addEventListener("animationend", () => {
+        dragon.style.display = "none";
+      });
+    </script>
 </body>
 </html>

@@ -2,12 +2,15 @@
 app/static/uploads/
 .env
 /app.db
+instance/app.db
 venv
 app/__pycache__
 app/routes/__pycache__
 app/services/__pycache__
 migrations/__pycache__
 __pycache__/
+migrations/versions
+migrations
 *.pyc
 .venv/
 .idea/
@@ -15,4 +18,4 @@ __pycache__/
 *.sublime-workspace
 .vscode/
 uploads/
-
+test.py

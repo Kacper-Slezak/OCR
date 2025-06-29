@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edytuj Listę Zakupów</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        html, body {
+            height: 100%;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+        }
+
+        main {
+            flex: 1;
+        }
+
+        /* Dodatkowe style dla elementów listy zakupów, aby wyglądały lepiej z Bootstrapem */
+        .product-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem; /* Zwiększony odstęp */
+            padding: 0.75rem 0; /* Większy padding */
+            border-bottom: 1px solid #dee2e6; /* Standardowy kolor linii Bootstrap */
+        }
+        .product-item:last-child {
+            border-bottom: none;
+        }
+        .product-item .form-control {
+            flex-grow: 1;
+        }
+        .checkbox-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem; /* Zwiększony odstęp między checkboxami */
+            padding: 0.5rem;
+            border: 1px solid #ced4da; /* Kolor ramki Bootstrap */
+            border-radius: 0.25rem; /* Standardowy border-radius Bootstrap */
+            flex-grow: 1;
+        }
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.9rem; /* Lekko większa czcionka */
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <header class="bg-dark text-white py-3 mb-4">
+        <div class="container">
+            <div class="d-flex justify-content-center">
+                <h1 class="h3 mb-0">Nasza Aplikacja OCR</h1>
+            </div>
+            <div class="bg-light mt-3 mb-2" style="height: 1px;"></div>
+            <nav>
+                <ul class="nav justify-content-center">
+                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('main.dashboard') }}">Main</a></li>
+                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('ocr.list_receipts') }}">Moje Paragony</a></li>
+                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('ocr.upload_receipt') }}">Prześlij Paragon</a></li>
+                    <li class="nav-item"><a class="nav-link text-white" href="{{ url_for('auth.logout') }}">Wyloguj (Użytkownik)</a></li>
+                    </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <script>
+            const mockShoppingListItems = [
+                { name: 'Chleb (pełnoziarnisty)', assigned_friends: ['friend1'] },
+                { name: 'Mleko (2%)', assigned_friends: ['friend1', 'friend2'] },
+            ];
+
+            const mockAllFriends = [
+                { id: 'friend1', name: 'Alicja' },
+                { id: 'friend2', name: 'Bartek' },
+                { id: 'friend3', name: 'Celina' },
+                { id: 'friend4', name: 'Dawid' },
+                { id: 'friend5', name: 'Ewa' }
+            ];
+
+            window.shopping_list_items = mockShoppingListItems;
+            window.all_friends = mockAllFriends;
+        </script>
+        <h1 class="mb-4">Edytuj Listę Zakupów</h1>
+
+        <div class="row">
+            <div class="col-lg-8 mb-4">
+                <form method="POST" action="/save-shopping-list" class="card shadow-sm p-4">
+                    <h2 class="h4 mb-3">Produkty i Kto Za Co Płaci</h2>
+                    <p class="text-muted mb-4">Dodaj lub edytuj produkty na liście i przypisz znajomych, którzy mają za nie zapłacić.</p>
+
+                    <div id="products-container" class="mb-4 border rounded p-3">
+                        </div>
+
+                    <button type="button" id="add-product" class="btn btn-success mb-4">
+                        Dodaj Nowy Produkt
+                    </button>
+
+                    <button type="submit" class="btn btn-primary w-100">Zapisz Listę Zakupów</button>
+                </form>
+            </div>
+
+            <div class="col-lg-4 mb-4">
+                <div class="card shadow-sm p-4">
+                    <h2 class="h4 mb-3">Twoi Znajomi</h2>
+                    <p class="text-muted mb-4">Osoby dostępne do przypisania do produktów.</p>
+                    <div class="border rounded overflow-hidden">
+                        <table class="table table-striped table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Imię</th>
+                                </tr>
+                            </thead>
+                            <tbody id="friends-list-body">
+                                </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-dark text-white text-center py-3 mt-4">
+        &copy; 2025 Nasza Aplikacja OCR
+    </footer>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const shoppingListItems = window.shopping_list_items;
+            const allFriends = window.all_friends;
+
+            const productsContainer = document.getElementById('products-container');
+            const addProductButton = document.getElementById('add-product');
+            const friendsListBody = document.getElementById('friends-list-body');
+
+            let productCounter = 0;
+
+            function createProductItem(product = { name: '', assigned_friends: [] }, index) {
+                const assignedFriends = Array.isArray(product.assigned_friends) ? product.assigned_friends : [];
+
+                const div = document.createElement('div');
+                div.classList.add('product-item');
+
+                div.innerHTML = `
+                    <input type="text" name="products[${index}][name]" value="${product.name}" placeholder="Nazwa produktu" required
+                           class="form-control flex-grow-1" />
+                    <div class="checkbox-container flex-grow-1">
+                        </div>
+                    <button type="button" class="remove-product btn btn-danger btn-sm">Usuń</button>
+                `;
+
+                const checkboxContainer = div.querySelector('.checkbox-container');
+                allFriends.forEach(friend => {
+                    const isChecked = assignedFriends.includes(friend.id) ? 'checked' : '';
+                    checkboxContainer.innerHTML += `
+                        <label class="checkbox-label form-check form-check-inline">
+                            <input type="checkbox" name="products[${index}][friends][]" value="${friend.id}" ${isChecked}
+                                   class="form-check-input" />
+                            <span>${friend.name}</span>
+                        </label>
+                    `;
+                });
+
+                return div;
+            }
+
+            // Initialize products from shoppingListItems
+            if (shoppingListItems.length > 0) {
+                shoppingListItems.forEach((product, idx) => {
+                    productsContainer.appendChild(createProductItem(product, productCounter++));
+                });
+            } else {
+                productsContainer.appendChild(createProductItem({}, productCounter++));
+            }
+
+            // Add new product button event
+            addProductButton.addEventListener('click', function() {
+                productsContainer.appendChild(createProductItem({ name: '', assigned_friends: [] }, productCounter++));
+            });
+
+            // Handle remove product button click
+            productsContainer.addEventListener('click', function(event) {
+                // Używamy .closest('.product-item') aby znaleźć najbliższy rodzic z tą klasą
+                if (event.target.classList.contains('remove-product')) {
+                    const productItem = event.target.closest('.product-item');
+                    if (productItem) {
+                        productItem.remove();
+                        reindexProducts();
+                    }
+                }
+            });
+
+            // Function to re-index products after removal
+            function reindexProducts() {
+                let currentIdx = 0;
+                productsContainer.querySelectorAll('.product-item').forEach(item => {
+                    // Update data-product-index attribute (nie jest używane w JS, ale dobre dla debugowania)
+                    item.setAttribute('data-product-index', currentIdx);
+
+                    // Update name attributes for inputs and checkboxes
+                    item.querySelectorAll('input[name^="products["]').forEach(input => {
+                        const oldName = input.getAttribute('name');
+                        input.name = oldName.replace(/products\[\d+\]/, `products[${currentIdx}]`);
+                    });
+
+                    currentIdx++;
+                });
+                productCounter = currentIdx; // Reset productCounter to the new total count
+            }
+
+            // Populate friends list
+            allFriends.forEach(friend => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td class="text-nowrap">${friend.name}</td>`;
+                friendsListBody.appendChild(tr);
+            });
+        });
+    </script>
+</body>
+</html>
