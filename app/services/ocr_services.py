@@ -68,11 +68,11 @@ def preprocess_image(image_path):
             else:
                 angle = -angle
 
-            if abs(angle) > 1 and abs(angle) < 45:  # Stosuj rotację tylko dla sensownych kątów
+            if 1 < abs(angle) < 45:  # Stosuj rotację tylko dla sensownych kątów
                 (h, w) = gray.shape[:2]
                 center = (w // 2, h // 2)
-                M = cv2.getRotationMatrix2D(center, angle, 1.0)
-                gray = cv2.warpAffine(gray, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+                m = cv2.getRotationMatrix2D(center, angle, 1.0)
+                gray = cv2.warpAffine(gray, m, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
                 print(f"DEBUG: Skorygowano przekrzywienie obrazu o {angle:.2f} stopni.")
         except Exception as e:
             print(f"WARNING: Nie udało się skorygować przekrzywienia: {e}")
