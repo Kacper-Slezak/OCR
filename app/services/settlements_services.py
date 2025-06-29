@@ -1,13 +1,14 @@
 # app/services/settlement_service.py
 
-from decimal import Decimal, ROUND_HALF_UP  # Importujemy Decimal dla dokładnych obliczeń finansowych
-from app import db  # Importujemy instancję bazy danych
-from app.models import Product, ShoppingList, Settlement  # Importujemy potrzebne modele
+from decimal import Decimal, ROUND_HALF_UP
+from app import db
+from app.models import Product, User, ShoppingList, Settlement, Friend
 
 
 def calculate_settlements(shopping_list_id):
     """
     Oblicza i zapisuje rozliczenia dla danej listy zakupów, minimalizując liczbę transakcji.
+    Rozliczenia mogą odbywać się między Użytkownikami a Znajomymi.
 
     Args:
         shopping_list_id (int): ID listy zakupów, dla której mają zostać obliczone rozliczenia.
@@ -19,97 +20,126 @@ def calculate_settlements(shopping_list_id):
     shopping_list = ShoppingList.query.get(shopping_list_id)
     if not shopping_list:
         print(f"ERROR: Lista zakupów o ID {shopping_list_id} nie została znaleziona.")
-        return []  # Zwracamy pustą listę zamiast None
-
-    products = Product.query.filter_by(shopping_list_id=shopping_list_id).all()
-    participants = shopping_list.participants.all()  # Pobieramy wszystkich uczestników listy
-
-    # Jeśli nie ma produktów lub uczestników, nie ma nic do rozliczania
-    if not products or not participants:
-        print(f"Brak produktów lub uczestników dla listy {shopping_list_id}. Brak rozliczeń do wygenerowania.")
         return []
 
-    # Inicjalizacja sald dla wszystkich uczestników
-    balances = {participant.id: Decimal('0.00') for participant in participants}
+    products = Product.query.filter_by(shopping_list_id=shopping_list_id).all()
+    # Pobieramy wszystkich uczestników listy (Users)
+    participants = shopping_list.participants.all()
+    # Pobieramy wszystkich znajomych, którzy są przypisani do produktów na tej liście
+    # Znajomi są właścicielami przez User, ale mogą być przypisani do produktów niezależnie.
+    # W kontekście rozliczeń, interesują nas znajomi, którzy faktycznie coś "nabyli".
+    # Możemy zidentyfikować ich poprzez product.assigned_friends_for_product.
 
-    # Obliczanie, kto ile zapłacił i ile jest mu przypisane
-    # Najpierw sumujemy wpłaty (kto ile zapłacił za produkty)
+    # Zbieramy wszystkie unikalne podmioty (Users i Friends) zaangażowane w płatności/przypisania na tej liście
+    # Używamy formatu klucza (typ_podmiotu, id_podmiotu)
+    all_entities = set()
+    for participant in participants:
+        all_entities.add(('user', participant.id))
+
     for product in products:
         if product.paid_by:
-            # Każdy, kto zapłacił, ma zwiększone saldo
-            balances[product.paid_by] += product.price
+            all_entities.add(('user', product.paid_by))
+        for friend in product.assigned_friends_for_product:
+            all_entities.add(('friend', friend.id))
 
-    # Następnie rozliczamy koszty produktów
+    if not products or not all_entities:  # Sprawdzamy, czy w ogóle są podmioty do rozliczeń
+        print(
+            f"Brak produktów lub podmiotów do rozliczeń dla listy {shopping_list_id}. Brak rozliczeń do wygenerowania.")
+        return []
+
+    # Inicjalizacja sald dla wszystkich zaangażowanych podmiotów (User i Friend)
+    # Klucze to krotki (typ_podmiotu, id_podmiotu)
+    balances = {entity: Decimal('0.00') for entity in all_entities}
+
+    # Sumujemy wpłaty (kto ile zapłacił za produkty)
+    for product in products:
+        if product.paid_by:
+            # Płacący to zawsze User
+            balances[('user', product.paid_by)] += product.price
+
+    # Rozliczamy koszty produktów
     for product in products:
         item_price = product.price
 
-        if product.assigned_to:
-            # Jeśli produkt jest przypisany do konkretnej osoby, ta osoba płaci całą cenę
-            if product.assigned_to in balances:  # Upewnij się, że przypisana osoba jest uczestnikiem
-                balances[product.assigned_to] -= item_price
-            else:
-                print(
-                    f"WARNING: Produkt {product.name} jest przypisany do użytkownika {product.assigned_to}, który nie jest uczestnikiem listy {shopping_list_id}. Koszt nie zostanie przypisany (błąd danych?).")
-        else:
-            # Jeśli produkt nie jest przypisany do nikogo, jego koszt ponosi osoba, która za niego zapłaciła.
-            # Poprzednio: dzielono równo między wszystkich uczestników.
-            if product.paid_by in balances:  # Upewnij się, że płacący jest uczestnikiem
-                balances[product.paid_by] -= item_price
-            else:
-                # Ten przypadek oznacza, że produkt nie jest przypisany i został zapłacony przez kogoś, kto nie jest uczestnikiem listy.
-                # W praktyce powinien być przypisany albo do uczestnika, albo płacący powinien być uczestnikiem.
-                print(
-                    f"WARNING: Produkt {product.name} (ID {product.id}) nie jest przypisany i został zapłacony przez użytkownika {product.paid_by}, który nie jest uczestnikiem listy {shopping_list_id}. Koszt nie zostanie rozliczony.")
+        assigned_friends = product.assigned_friends_for_product.all()
 
-    # Filtrowanie sald zerowych i zaokrąglanie do dwóch miejsc po przecinku
-    # Używamy ROUND_HALF_UP dla standardowego zaokrąglania bankowego
-    balances = {uid: balance.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-                for uid, balance in balances.items() if balance != Decimal('0.00')}
+        if assigned_friends:
+            # Jeśli produkt jest przypisany do jednego lub wielu ZNAJOMYCH,
+            # koszt jest dzielony równo między nich.
+            share_per_friend = item_price / Decimal(len(assigned_friends))
+            for friend in assigned_friends:
+                if ('friend', friend.id) in balances:
+                    balances[('friend', friend.id)] -= share_per_friend
+                else:
+                    # To nie powinno się zdarzyć, jeśli all_entities jest poprawnie zbudowane
+                    print(f"WARNING: Znajomy {friend.name} (ID {friend.id}) nie jest w balansie. Błąd logiki.")
+        else:
+            # Jeśli produkt nie jest przypisany do żadnych znajomych,
+            # jego koszt ponosi osoba, która za niego zapłaciła (User).
+            if product.paid_by:  # Product.paid_by jest User ID
+                if ('user', product.paid_by) in balances:
+                    balances[('user', product.paid_by)] -= item_price
+                else:
+                    print(
+                        f"WARNING: Produkt {product.name} (ID {product.id}) nie jest przypisany i został zapłacony przez użytkownika {product.paid_by}, który nie jest w balansie. Koszt nie zostanie rozliczony.")
+            else:
+                print(
+                    f"WARNING: Produkt {product.name} (ID {product.id}) nie jest przypisany i nie ma przypisanego płacącego. Koszt nie zostanie rozliczony.")
+
+    # Filtrowanie sald zerowych i zaokrąglanie
+    balances = {entity: balance.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                for entity, balance in balances.items() if balance != Decimal('0.00')}
 
     # Podział na dłużników i wierzycieli
-    debtors = {uid: abs(balance) for uid, balance in balances.items() if balance < 0}
-    creditors = {uid: balance for uid, balance in balances.items() if balance > 0}
+    debtors = {entity: abs(balance) for entity, balance in balances.items() if balance < 0}
+    creditors = {entity: balance for entity, balance in balances.items() if balance > 0}
 
-    # Konwersja na listy słowników i sortowanie (dla algorytmu minimalizacji)
-    # Dłużnicy: od największego długu do najmniejszego
-    # Wierzyciele: od największej kwoty do odzyskania do najmniejszej
-    debtors_list = sorted([{'id': uid, 'amount': amount} for uid, amount in debtors.items()], key=lambda x: x['amount'],
-                          reverse=True)
-    creditors_list = sorted([{'id': uid, 'amount': amount} for uid, amount in creditors.items()],
+    # Konwersja na listy słowników i sortowanie
+    # Teraz zawierają (typ_podmiotu, id_podmiotu)
+    debtors_list = sorted([{'entity': entity, 'amount': amount} for entity, amount in debtors.items()],
+                          key=lambda x: x['amount'], reverse=True)
+    creditors_list = sorted([{'entity': entity, 'amount': amount} for entity, amount in creditors.items()],
                             key=lambda x: x['amount'], reverse=True)
 
     generated_settlements = []
 
     # Algorytm minimalizujący liczbę transakcji (Debtor-Creditor Matching)
     while debtors_list and creditors_list:
-        debtor = debtors_list[0]
-        creditor = creditors_list[0]
+        debtor_item = debtors_list[0]
+        creditor_item = creditors_list[0]
 
-        # Kwota do uregulowania w tej transakcji
-        amount_to_settle = min(debtor['amount'], creditor['amount'])
+        amount_to_settle = min(debtor_item['amount'], creditor_item['amount'])
 
-        # Tworzenie obiektu rozliczenia
         new_settlement = Settlement(
             shopping_list_id=shopping_list_id,
-            debtor_id=debtor['id'],
-            creditor_id=creditor['id'],
             amount=amount_to_settle,
             is_settled=False
         )
+
+        # Ustawienie pól dłużnika
+        if debtor_item['entity'][0] == 'user':
+            new_settlement.debtor_user_id = debtor_item['entity'][1]
+        else:  # 'friend'
+            new_settlement.debtor_friend_id = debtor_item['entity'][1]
+
+        # Ustawienie pól wierzyciela
+        if creditor_item['entity'][0] == 'user':
+            new_settlement.creditor_user_id = creditor_item['entity'][1]
+        else:  # 'friend'
+            new_settlement.creditor_friend_id = creditor_item['entity'][1]
+
         generated_settlements.append(new_settlement)
         db.session.add(new_settlement)
 
-        # Aktualizacja sald
-        debtor['amount'] -= amount_to_settle
-        creditor['amount'] -= amount_to_settle
+        # Aktualizacja sald w listach
+        debtor_item['amount'] -= amount_to_settle
+        creditor_item['amount'] -= amount_to_settle
 
-        # Usuwanie dłużników/wierzycieli, których saldo zostało całkowicie uregulowane
-        if debtor['amount'] == Decimal('0.00'):
+        if debtor_item['amount'] == Decimal('0.00'):
             debtors_list.pop(0)
-        if creditor['amount'] == Decimal('0.00'):
+        if creditor_item['amount'] == Decimal('0.00'):
             creditors_list.pop(0)
 
-    # Zapis rozliczeń do bazy danych
     try:
         db.session.commit()
         print(f"Wygenerowano {len(generated_settlements)} rozliczeń dla listy {shopping_list_id}.")
@@ -118,4 +148,3 @@ def calculate_settlements(shopping_list_id):
         db.session.rollback()
         print(f"Błąd podczas zapisu rozliczeń dla listy {shopping_list_id}: {e}")
         return []
-
