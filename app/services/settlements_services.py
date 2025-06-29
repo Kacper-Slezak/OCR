@@ -2,7 +2,7 @@
 
 from decimal import Decimal, ROUND_HALF_UP
 from app import db
-from app.models import Product, User, ShoppingList, Settlement, Friend
+from app.models import Product, ShoppingList, Settlement
 
 
 def calculate_settlements(shopping_list_id):
