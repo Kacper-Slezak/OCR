@@ -3,36 +3,186 @@
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
-    <h1 class="title">Moje listy zakupów</h1>
+    <style>
+        /* Styling for the friend input group */
+        .friend-input-group {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .friend-input-group .form-control {
+            flex-grow: 1;
+        }
+        /* Styling for action buttons in the friends table */
+        .friend-actions {
+            white-space: nowrap; /* Prevents line breaks for the button */
+        }
+        /* Additional styling for better spacing between sections */
+        .card {
+            height: 100%; /* Ensures cards have the same height in columns */
+            display: flex;
+            flex-direction: column;
+        }
+        .card-body-scroll {
+            flex-grow: 1;
+            overflow-y: auto; /* Adds a scrollbar if content is too long */
+        }
+    </style>
 
-    <div class="content">
-        <!-- Button to create a new list - should trigger a GET request -->
-        <a href="{{ url_for('receipt.edit_shopping_list') }}" class="btn btn-outline-dark">Stwórz nową listę</a>
+    <h1 class="title mb-4">Moje listy zakupów i znajomi</h1>
 
-        {% if lists|length < 1 %}
-        <h4>Brak list</h4>
-        {% else %}
-        <h4>Twoje listy:</h4>
-        <table>
-            <tr>
-                <th>Nazwa Listy</th>
-                <th>Data Utworzenia</th>
-                <th>Działania</th>
-            </tr>
-            {% for list in lists %}
-                <tr>
-                    <td>{{ list.name if list.name else 'Bez nazwy' }}</td> {# Assuming 'name' field exists, otherwise 'Bez nazwy' #}
-                    <td>{{ list.upload_date.strftime('%Y-%m-%d %H:%M') if list.upload_date else 'Brak daty' }}</td>
-                    <td>
-                        <!-- Link to edit an existing list -->
-                        <a href="{{ url_for('receipt.edit_shopping_list', list_id=list.id) }}">
-                            <button type="button" class="btn btn-outline-dark">Edytuj</button>
-                        </a>
-                        {# You might also want a delete button here #}
-                    </td>
-                </tr>
-            {% endfor %}
-        </table>
-        {% endif %}
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Left column: Shopping Lists (takes 8/12 width) -->
+            <div class="col-lg-8 mb-4">
+                <div class="card shadow-sm p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h2 class="h4 mb-0">Twoje listy:</h2>
+                        <!-- Button to create a new list -->
+                        <a href="{{ url_for('receipt.edit_shopping_list') }}" class="btn btn-outline-dark">Stwórz nową listę</a>
+                    </div>
+
+                    {% if lists|length < 1 %}
+                    <h4 class="text-muted">Brak list</h4>
+                    {% else %}
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Nazwa Listy</th>
+                                    <th scope="col">Data Utworzenia</th>
+                                    <th scope="col">Działania</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for list in lists %}
+                                    <tr>
+                                        <td>{{ list.name if list.name else 'Bez nazwy' }}</td>
+                                        <td>{{ list.upload_date.strftime('%Y-%m-%d %H:%M') if list.upload_date else 'Brak daty' }}</td>
+                                        <td>
+                                            <!-- Link to edit an existing list -->
+                                            <a href="{{ url_for('receipt.edit_shopping_list', list_id=list.id) }}">
+                                                <button type="button" class="btn btn-outline-dark btn-sm">Edytuj</button>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Right column: Your Friends (takes 4/12 width) -->
+            <div class="col-lg-4 mb-4">
+                <form method="POST" action="/dashboard" class="card shadow-sm p-4">
+                    <div class="card shadow-sm p-4">
+                        <h2 class="h4 mb-3">Twoi Znajomi</h2>
+                        <p class="text-muted mb-3">Dodawaj i usuwaj osoby, aby móc przypisywać je do produktów.</p>
+
+                        <div class="friend-input-group mb-4">
+                            <input type="text" id="new-friend-name" class="form-control" placeholder="Imię nowego znajomego" aria-label="Imię nowego znajomego">
+                            <button type="submit" id="add-friend-button" class="btn btn-success">Dodaj</button>
+                        </div>
+
+                        <div class="border rounded overflow-hidden">
+                            <table class="table table-striped table-hover mb-0">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Imię</th>
+                                        <th scope="col" class="text-end"></th> {# Empty column for action buttons #}
+                                    </tr>
+                                </thead>
+                                <tbody id="friends-list-body">
+                                    <!-- Friends will be loaded here by JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
+{% endblock %}
+
+{% block scripts %}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const friendsListBody = document.getElementById('friends-list-body');
+            const newFriendNameInput = document.getElementById('new-friend-name');
+            const addFriendButton = document.getElementById('add-friend-button');
+
+            // Load friends from localStorage or use an empty array
+            let allFriends = JSON.parse(localStorage.getItem('allFriends')) || [];
+
+            // Function to render/re-render the friends list
+            function renderFriendsList() {
+                friendsListBody.innerHTML = ''; // Clear existing list
+
+                if (allFriends.length === 0) {
+                    const noFriendsRow = document.createElement('tr');
+                    noFriendsRow.innerHTML = `<td colspan="2" class="text-center text-muted py-3">Brak znajomych. Dodaj pierwszego!</td>`;
+                    friendsListBody.appendChild(noFriendsRow);
+                    return;
+                }
+
+                allFriends.forEach(friend => {
+                    const tr = document.createElement('tr');
+                    tr.setAttribute('data-friend-id', friend.id); // Store friend ID for removal
+                    tr.innerHTML = `
+                        <td>${friend.name}</td>
+                        <td class="text-end friend-actions">
+                            <button type="button" class="btn btn-danger btn-sm remove-friend-button">Usuń</button>
+                        </td>
+                    `;
+                    friendsListBody.appendChild(tr);
+                });
+            }
+
+            // Function to save friends to localStorage
+            function saveFriends() {
+                localStorage.setItem('allFriends', JSON.stringify(allFriends));
+            }
+
+            // Event listener for adding a new friend
+            addFriendButton.addEventListener('click', function() {
+                // For debugging: Check if the button click event is fired
+                console.log('Przycisk "Dodaj" został kliknięty!');
+
+                const friendName = newFriendNameInput.value.trim();
+                if (friendName) {
+                    const newFriend = {
+                        id: 'friend-' + Date.now(), // Simple unique ID
+                        name: friendName
+                    };
+                    allFriends.push(newFriend);
+                    saveFriends();
+                    renderFriendsList();
+                    newFriendNameInput.value = ''; // Clear the input field
+                    console.log('Znajomy dodany:', newFriend.name); // For debugging
+                } else {
+                    console.log('Nazwa znajomego jest pusta.'); // For debugging
+                    newFriendNameInput.focus();
+                }
+            });
+
+            // Event listener for removing a friend (delegated)
+            friendsListBody.addEventListener('click', function(event) {
+                if (event.target.classList.contains('remove-friend-button')) {
+                    const row = event.target.closest('tr');
+                    const friendIdToRemove = row.getAttribute('data-friend-id');
+
+                    // Filter out the friend to remove
+                    allFriends = allFriends.filter(friend => friend.id !== friendIdToRemove);
+                    saveFriends();
+                    renderFriendsList();
+                    console.log('Znajomy usunięty:', friendIdToRemove); // For debugging
+                }
+            });
+
+            // Initial render of the friends list when the page loads
+            renderFriendsList();
+        });
+    </script>
 {% endblock %}
