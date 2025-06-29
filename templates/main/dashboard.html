@@ -35,72 +35,69 @@
         <div class="row">
             <!-- Left column: Shopping Lists (takes 8/12 width) -->
             <div class="col-lg-8 mb-4">
-                <div class="card shadow-sm p-4">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h2 class="h4 mb-0">Twoje listy:</h2>
-                        <!-- Button to create a new list -->
-                        <a href="{{ url_for('receipt.edit_shopping_list') }}" class="btn btn-outline-dark">Stwórz nową listę</a>
-                    </div>
-
-                    {% if lists|length < 1 %}
-                    <h4 class="text-muted">Brak list</h4>
-                    {% else %}
+                <div class="card shadow-sm p-4 mb-4">
+                    <h2 class="h4 mb-3">Twoje Listy Zakupów</h2>
+                    <a href="{{ url_for('receipt.lists_edition') }}" class="btn btn-primary mb-3">Stwórz Nową Listę</a>
                     <div class="table-responsive">
-                        <table class="table table-striped table-hover mb-0">
+                        <table class="table table-striped table-hover">
                             <thead>
                                 <tr>
-                                    <th scope="col">Nazwa Listy</th>
-                                    <th scope="col">Data Utworzenia</th>
-                                    <th scope="col">Działania</th>
+                                    <th>Nazwa Listy</th>
+                                    <th>Data Utworzenia</th>
+                                    <th>Akcje</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for list in lists %}
+                                {% if lists %} {# Zmienione z recipts na lists #}
+                                    {% for list in lists %} {# Zmienione z recipt na list #}
                                     <tr>
-                                        <td>{{ list.name if list.name else 'Bez nazwy' }}</td>
-                                        <td>{{ list.upload_date.strftime('%Y-%m-%d %H:%M') if list.upload_date else 'Brak daty' }}</td>
+                                        <td>{{ list.name }}</td>
+                                        <td>{{ list.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
                                         <td>
-                                            <!-- Link to edit an existing list -->
-                                            <a href="{{ url_for('receipt.edit_shopping_list', list_id=list.id) }}">
-                                                <button type="button" class="btn btn-outline-dark btn-sm">Edytuj</button>
-                                            </a>
+                                            <a href="{{ url_for('receipt.lists_edition', list_id=list.id) }}" class="btn btn-sm btn-info me-2">Edytuj</a>
+                                            <form action="{{ url_for('receipt.delete_shopping_list', list_id=list.id) }}" method="POST" style="display:inline;">
+                                                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Czy na pewno chcesz usunąć tę listę?');">Usuń</button>
+                                            </form>
                                         </td>
                                     </tr>
-                                {% endfor %}
+                                    {% endfor %}
+                                {% else %}
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted py-3">Brak list zakupów. Stwórz pierwszą!</td>
+                                </tr>
+                                {% endif %}
                             </tbody>
                         </table>
                     </div>
-                    {% endif %}
                 </div>
             </div>
 
-            <!-- Right column: Your Friends (takes 4/12 width) -->
+            <!-- Right column: Friends (takes 4/12 width) -->
             <div class="col-lg-4 mb-4">
-                <form method="POST" action="/dashboard" class="card shadow-sm p-4">
-                    <div class="card shadow-sm p-4">
-                        <h2 class="h4 mb-3">Twoi Znajomi</h2>
-                        <p class="text-muted mb-3">Dodawaj i usuwaj osoby, aby móc przypisywać je do produktów.</p>
-
-                        <div class="friend-input-group mb-4">
-                            <input type="text" id="new-friend-name" class="form-control" placeholder="Imię nowego znajomego" aria-label="Imię nowego znajomego">
-                            <button type="submit" id="add-friend-button" class="btn btn-success">Dodaj</button>
+                <div class="card shadow-sm p-4">
+                    <h2 class="h4 mb-3">Twoi Znajomi</h2>
+                    <form method="POST" action="{{ url_for('main.dashboard') }}" class="mb-3">
+                        <div class="input-group">
+                            <input type="text" name="new-friend-name" class="form-control" placeholder="Imię" required>
+                            <button type="submit" class="btn btn-success">Dodaj Znajomego</button>
                         </div>
-
-                        <div class="border rounded overflow-hidden">
-                            <table class="table table-striped table-hover mb-0">
-                                <thead>
-                                    <tr>
-                                        <th scope="col">Imię</th>
-                                        <th scope="col" class="text-end"></th> {# Empty column for action buttons #}
-                                    </tr>
-                                </thead>
-                                <tbody id="friends-list-body">
-                                    <!-- Friends will be loaded here by JavaScript -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </form>
+                    </form>
+                    <ul class="list-group">
+                        {% if friends %}
+                            {% for friend in friends %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                {{ friend.name }}
+                                <form method="POST" action="{{ url_for('main.dashboard') }}" style="display:inline;">
+                                    <input type="hidden" name="remove_friend_id" value="{{ friend.id }}">
+                                    <button type="submit" class="btn btn-danger btn-sm">Usuń</button>
+                                </form>
+                            </li>
+                            {% endfor %}
+                        {% else %}
+                            <li class="list-group-item text-muted">Brak znajomych. Dodaj pierwszego!</li>
+                        {% endif %}
+                    </ul>
+                </div>
             </div>
         </div>
     </div>

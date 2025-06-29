@@ -1,107 +1,74 @@
 import json
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
-from app import db # Zakładam, że 'db' jest Twoim obiektem SQLAlchemy
-from app.models import Receipt # Zakładam, że 'Receipt' to Twój model, który będzie przechowywał listę zakupów
-# Jeśli masz osobny model dla listy zakupów, np. ShoppingList, użyj go zamiast Receipt
+from app import db
+# Zmień Receipt na ShoppingList, jeśli to ten model przechowuje listy zakupów
+from app.models import ShoppingList, Friend, Product # <--- WAŻNE: Dodaj Friend i Product
+
 
 receipt_bp = Blueprint('receipt', __name__, url_prefix='/lists_edition')
-
-# --- Mock danych znajomych (w prawdziwej aplikacji pobieraj z bazy danych) ---
-# Przykład struktury: {'id': 'friend1', 'name': 'Alicja'}
-MOCK_ALL_FRIENDS = [
-    {'id': 'friend1', 'name': 'Alicja'},
-    {'id': 'friend2', 'name': 'Bartek'},
-    {'id': 'friend3', 'name': 'Celina'},
-    {'id': 'friend4', 'name': 'Dawid'},
-    {'id': 'friend5', 'name': 'Ewa'}
-]
-# -------------------------------------------------------------------------
 
 @receipt_bp.route('/', methods=['GET'])
 @receipt_bp.route('/<int:list_id>', methods=['GET'])
 @login_required
-def edit_shopping_list(list_id=None):
-    """
-    Endpoint do wyświetlania lub tworzenia listy zakupów.
-    Jeśli list_id jest None, próbuje załadować domyślną listę użytkownika lub tworzy pustą.
-    """
-    shopping_list_data = [] # Domyślna pusta lista
-    current_list = None
-    list_title = "Nowa Lista Zakupów"
+def lists_edition(list_id=None):
+    shopping_list_data = [] # Dane produktów do przekazania do JS
+    list_name = "" # Domyślna pusta nazwa
 
     if list_id:
         # Próba załadowania konkretnej listy po ID
-        current_list = Receipt.query.filter_by(id=list_id, user_id=current_user.id).first()
+        # Zmień Receipt na ShoppingList
+        current_list = ShoppingList.query.filter_by(id=list_id, created_by=current_user.id).first() # Zmień user_id na created_by
         if current_list:
-            # Zakładamy, że processed_data zawiera listę produktów
-            shopping_list_data = current_list.processed_data if current_list.processed_data else []
-            list_title = f"Edytuj Listę ID: {current_list.id}"
+            list_name = current_list.name
+            # Przygotuj dane produktów dla JavaScriptu
+            # Zakładamy, że lista.products jest relacją do Product
+            for product in current_list.products:
+                # Upewnij się, że masz relację assigned_friends_for_product na modelu Product
+                assigned_friends_ids = [friend.id for friend in product.assigned_friends_for_product]
+                shopping_list_data.append({
+                    'id': product.id,
+                    'name': product.name,
+                    'price': float(product.price), # Przekształć Decimal na float dla JSON
+                    'assigned_friends': assigned_friends_ids
+                })
         else:
-            flash('Lista zakupów o podanym ID nie została znaleziona lub nie masz do niej dostępu.', 'error')
-            return redirect(url_for('recipt.edit_shopping_list')) # Przekieruj na stronę tworzenia nowej listy
+            flash('Lista zakupów o podanym ID nie została znaleziona lub nie masz do niej dostępu.', 'danger')
+            return redirect(url_for('main.dashboard')) # <--- WAŻNE: Przekierowanie na główny dashboard
 
-    # W przypadku braku list_id (route '/'), można by tu dodać logikę pobierania "domyślnej" listy użytkownika,
-    # np. pierwszej listy, którą kiedykolwiek stworzył, lub listy oznaczonej jako domyślna.
-    # Na potrzeby tego przykładu, jeśli nie ma list_id, po prostu tworzymy pustą listę do edycji.
+    # Przygotuj dane znajomych z bazy danych, a nie mock
+    all_friends_data = [{'id': friend.id, 'name': friend.name} for friend in
+                        current_user.friends_owned.all()]  # <--- WAŻNE: Pobieraj z bazy danych
 
     return render_template(
-        '/recipt/lists_edition.html', # Upewnij się, że ścieżka do szablonu jest poprawna
-        shopping_list_items=shopping_list_data,
-        all_friends=MOCK_ALL_FRIENDS,
-        list_id=list_id, # Przekaż ID listy do szablonu, aby formularz mógł je odesłać
-        list_title=list_title
+        'recipt/lists_edition.html',  # <--- WAŻNE: Poprawiona nazwa szablonu na taką, którą używaliśmy wcześniej
+        shopping_list_items=json.dumps(shopping_list_data),
+        all_friends=json.dumps(all_friends_data),
+        list_id=list_id,
+        list_name=list_name  # Przekaż nazwę listy do szablonu
     )
 
-@receipt_bp.route('/save', methods=['POST'])
+# Usunięcie całej funkcji save_shopping_list, ponieważ jej logika została przeniesiona do main.py
+# @receipt_bp.route('/save', methods=['POST'])
+# @login_required
+# def save_shopping_list():
+#    ... ta funkcja jest USUNIĘTA ...
+
+# Możesz zostawić endpoint do usuwania listy, jeśli chcesz.
+@receipt_bp.route('/delete-shopping-list/<int:list_id>', methods=['POST'])
 @login_required
-def save_shopping_list():
-    """
-    Endpoint do zapisywania (tworzenia/aktualizowania) listy zakupów.
-    """
-    list_id = request.form.get('list_id') # Pobierz ID listy z ukrytego pola formularza
-    products_data = []
+def delete_shopping_list(list_id):
+    shopping_list_to_delete = ShoppingList.query.get_or_404(list_id)
+    if shopping_list_to_delete.created_by != current_user.id:
+        flash('Nie masz uprawnień do usunięcia tej listy.', 'danger')
+        return redirect(url_for('main.dashboard'))
 
-    # Iteruj przez dane formularza, aby znaleźć produkty i przypisanych znajomych
-    # Formularz wysyła dane w formacie: products[0][name], products[0][friends][], products[1][name], itd.
-    # Musimy znaleźć unikalne indeksy produktów.
-    product_indices = sorted(list(set([
-        int(k.split('[')[1].split(']')[0])
-        for k in request.form if k.startswith('products[') and '][' in k
-    ])))
+    try:
+        db.session.delete(shopping_list_to_delete)
+        db.session.commit()
+        flash('Lista zakupów została pomyślnie usunięta!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Błąd podczas usuwania listy zakupów: {e}', 'danger')
 
-    for i in product_indices:
-        product_name = request.form.get(f'products[{i}][name]')
-        assigned_friends = request.form.getlist(f'products[{i}][friends][]') # Użyj getlist dla checkboxów
-
-        if product_name: # Tylko dodaj produkt, jeśli ma nazwę
-            products_data.append({
-                'name': product_name,
-                'assigned_friends': assigned_friends
-            })
-
-    if list_id:
-        # Edycja istniejącej listy
-        current_list = Receipt.query.filter_by(id=list_id, user_id=current_user.id).first()
-        if current_list:
-            current_list.processed_data = products_data # Zapisz zaktualizowane dane
-            flash('Lista zakupów została zaktualizowana!', 'success')
-        else:
-            flash('Błąd: Nie znaleziono listy do aktualizacji lub nie masz do niej dostępu.', 'error')
-            return redirect(url_for('receipt.edit_shopping_list')) # Przekieruj na stronę tworzenia nowej listy
-    else:
-        # Tworzenie nowej listy
-        new_list = Receipt(user_id=current_user.id, processed_data=products_data)
-        db.session.add(new_list)
-        flash('Nowa lista zakupów została utworzona!', 'success')
-
-    db.session.commit()
-    # Po zapisaniu, możesz przekierować użytkownika z powrotem do edycji listy (jeśli istnieje)
-    # lub na ogólną stronę z listami. Tutaj przekierowuję na stronę główną blueprintu.
-    if list_id:
-        return redirect(url_for('receipt.edit_shopping_list', list_id=list_id))
-    else:
-        # Jeśli to była nowa lista, możesz przekierować do jej edycji z nowym ID
-        # (co wymagałoby odświeżenia obiektu new_list, żeby poznać jego ID)
-        # Lub po prostu na ogólną stronę /lists_edition/
-        return redirect(url_for('receipt.edit_shopping_list'))
+    return redirect(url_for('main.dashboard'))

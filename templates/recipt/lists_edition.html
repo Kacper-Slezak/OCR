@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="pl">
 <head>
     <meta charset="UTF-8">
@@ -70,31 +71,22 @@
     </header>
 
     <main class="container">
+
         <script>
-            const mockShoppingListItems = [
-                { name: 'Chleb (pełnoziarnisty)', assigned_friends: ['friend1'] },
-                { name: 'Mleko (2%)', assigned_friends: ['friend1', 'friend2'] },
-            ];
-
-            const mockAllFriends = [
-                { id: 'friend1', name: 'Alicja' },
-                { id: 'friend2', name: 'Bartek' },
-                { id: 'friend3', name: 'Celina' },
-                { id: 'friend4', name: 'Dawid' },
-                { id: 'friend5', name: 'Ewa' }
-            ];
-
-            window.shopping_list_items = mockShoppingListItems;
-            window.all_friends = mockAllFriends;
+            const allFriends = {{ all_friends_json | safe }};
         </script>
+
         <h1 class="mb-4">Edytuj Listę Zakupów</h1>
 
         <div class="row">
             <div class="col-lg-8 mb-4">
-                <form method="POST" action="/save-shopping-list" class="card shadow-sm p-4">
+                <form method="POST" action="{{ url_for('main.dashboard') }}" class="card shadow-sm p-4">
                     <h2 class="h4 mb-3">Produkty i Kto Za Co Płaci</h2>
                     <p class="text-muted mb-4">Dodaj lub edytuj produkty na liście i przypisz znajomych, którzy mają za nie zapłacić.</p>
-
+                    <div class="mb-3">
+                        <label for="list-name" class="form-label">Nazwa listy zakupów</label>
+                        <input type="text" name="list_name" value="{{ list_name }}" placeholder="Nazwa listy" required>
+                    </div>
                     <div id="products-container" class="mb-4 border rounded p-3">
                         </div>
 
@@ -118,7 +110,12 @@
                                 </tr>
                             </thead>
                             <tbody id="friends-list-body">
-                                </tbody>
+                                {% for friend in all_friends %}
+                                    <tr>
+                                        <td>{{ friend.name }}</td>
+                                    </tr>
+                                    {% endfor %}
+                            </tbody>
                         </table>
                     </div>
                 </div>
@@ -133,12 +130,15 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const shoppingListItems = window.shopping_list_items;
-            const allFriends = window.all_friends;
+            // Przekazujemy dane z Flaska do JavaScriptu
+            // Jeśli to nowa lista, shoppingListItems będzie puste []
+            const shoppingListItems = JSON.parse('{{ shopping_list_items | safe }}');
+            const allFriends = JSON.parse('{{ all_friends | safe }}'); // Upewnij się, że all_friends są przekazywani!
 
             const productsContainer = document.getElementById('products-container');
             const addProductButton = document.getElementById('add-product');
-            const friendsListBody = document.getElementById('friends-list-body');
+            // Usunąłem friendsListBody, bo w dashboard.html to ma być
+            // const friendsListBody = document.getElementById('friends-list-body');
 
             let productCounter = 0;
 
@@ -148,16 +148,19 @@
                 const div = document.createElement('div');
                 div.classList.add('product-item');
 
+                const productIdInput = product.id ? `<input type="hidden" name="products[${index}][id]" value="${product.id}" />` : '';
+
                 div.innerHTML = `
+                    ${productIdInput}
                     <input type="text" name="products[${index}][name]" value="${product.name}" placeholder="Nazwa produktu" required
                            class="form-control flex-grow-1" />
                     <div class="checkbox-container flex-grow-1">
-                        </div>
+                    </div>
                     <button type="button" class="remove-product btn btn-danger btn-sm">Usuń</button>
                 `;
 
                 const checkboxContainer = div.querySelector('.checkbox-container');
-                allFriends.forEach(friend => {
+                allFriends.forEach(friend => { // Używamy allFriends przekazanych z Flaska
                     const isChecked = assignedFriends.includes(friend.id) ? 'checked' : '';
                     checkboxContainer.innerHTML += `
                         <label class="checkbox-label form-check form-check-inline">
@@ -177,17 +180,15 @@
                     productsContainer.appendChild(createProductItem(product, productCounter++));
                 });
             } else {
-                productsContainer.appendChild(createProductItem({}, productCounter++));
+                const defaultProduct = { name: 'Woda gazowana', assigned_friends: [] };
+                productsContainer.appendChild(createProductItem(defaultProduct, productCounter++));
             }
 
-            // Add new product button event
             addProductButton.addEventListener('click', function() {
                 productsContainer.appendChild(createProductItem({ name: '', assigned_friends: [] }, productCounter++));
             });
 
-            // Handle remove product button click
             productsContainer.addEventListener('click', function(event) {
-                // Używamy .closest('.product-item') aby znaleźć najbliższy rodzic z tą klasą
                 if (event.target.classList.contains('remove-product')) {
                     const productItem = event.target.closest('.product-item');
                     if (productItem) {
@@ -197,30 +198,19 @@
                 }
             });
 
-            // Function to re-index products after removal
             function reindexProducts() {
                 let currentIdx = 0;
                 productsContainer.querySelectorAll('.product-item').forEach(item => {
-                    // Update data-product-index attribute (nie jest używane w JS, ale dobre dla debugowania)
-                    item.setAttribute('data-product-index', currentIdx);
-
-                    // Update name attributes for inputs and checkboxes
                     item.querySelectorAll('input[name^="products["]').forEach(input => {
                         const oldName = input.getAttribute('name');
                         input.name = oldName.replace(/products\[\d+\]/, `products[${currentIdx}]`);
                     });
-
                     currentIdx++;
                 });
-                productCounter = currentIdx; // Reset productCounter to the new total count
+                productCounter = currentIdx;
             }
 
-            // Populate friends list
-            allFriends.forEach(friend => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td class="text-nowrap">${friend.name}</td>`;
-                friendsListBody.appendChild(tr);
-            });
+            // Usunięto logikę wypełniania listy znajomych w edit_shopping_list.html
         });
     </script>
 </body>
