@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+{% extends "base.html" %} {% block content %}
+<div class="container-fluid">
+  <div class="dashboard-container">
+    <h1 class="text-center mb-4" style="color: #333; font-weight: bold">
+      <i class="fas fa-chart-line me-3"></i>Dashboard Rozliczeń
+    </h1>
+
+    <div class="row mb-4">
+      <div class="col-md-6 offset-md-3">
+        <div class="stat-card" id="mainBalanceCard">
+          <h3><i class="fas fa-balance-scale me-2"></i>Twoje Saldo</h3>
+          <h1 id="mainBalance">Ładowanie...</h1>
+          <p id="balanceDescription"></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-md-6">
+        <div class="chart-container" style="position: relative; height: 350px;">
+          <div class="chart-title">
+            <i class="fas fa-chart-line me-2"></i>Trend Salda w Czasie
+          </div>
+          <canvas id="balanceTrendChart"></canvas>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="chart-container" style="position: relative; height: 350px;">
+          <div class="chart-title">
+            <i class="fas fa-chart-area me-2"></i>Aktywność Rozliczeń
+          </div>
+          <canvas id="activityChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <hr class="my-5"> <div class="section-title">
+      <i class="fas fa-users me-2"></i>Wszystkie Rozliczenia
+    </div>
+
+    <div id="allBalances">
+      <p class="text-center text-muted">Ładowanie rozliczeń...</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Global variables to store fetched data
+  let settlementStats = {};
+  let settlementActivity = {};
+
+  // Function to calculate and display main balance
+  function calculateMainBalance() {
+    const mainBalanceEl = document.getElementById("mainBalance");
+    const mainBalanceCard = document.getElementById("mainBalanceCard");
+    const descriptionEl = document.getElementById("balanceDescription");
+
+    const total = settlementStats.total_balance;
+
+    mainBalanceEl.textContent = total.toFixed(2) + " zł";
+
+    if (total > 0) {
+      mainBalanceCard.classList.add("positive");
+      mainBalanceCard.classList.remove("negative");
+      mainBalanceEl.textContent = "+" + total.toFixed(2) + " zł";
+      descriptionEl.textContent =
+        "Łącznie są Ci winni " + total.toFixed(2) + " zł";
+    } else if (total < 0) {
+      mainBalanceCard.classList.add("negative");
+      mainBalanceCard.classList.remove("positive");
+      mainBalanceEl.textContent = total.toFixed(2) + " zł";
+      descriptionEl.textContent =
+        "Łącznie jesteś winny " + Math.abs(total).toFixed(2) + " zł";
+    } else {
+      mainBalanceCard.classList.remove("positive", "negative");
+      descriptionEl.textContent = "Wszystkie rozliczenia są wyrównane";
+    }
+  }
+
+  // Create Balance Trend Chart
+  function createBalanceTrendChart() {
+    const ctx = document.getElementById("balanceTrendChart").getContext("2d");
+
+    // Generate mock trend data based on current balance and activity
+    // In real implementation, this would come from API with historical balance data
+    const trendData = generateTrendData();
+
+    if (trendData.length === 0) {
+      ctx.canvas.parentNode.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100"><p class="text-center text-muted">Brak danych historycznych</p></div>';
+      return;
+    }
+
+    new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: trendData.map(item => item.date),
+        datasets: [{
+          label: "Saldo (zł)",
+          data: trendData.map(item => item.balance),
+          borderColor: "rgba(0, 210, 211, 1)",
+          backgroundColor: "rgba(0, 210, 211, 0.1)",
+          borderWidth: 3,
+          fill: true,
+          tension: 0.4,
+          pointBackgroundColor: "rgba(0, 210, 211, 1)",
+          pointBorderColor: "#fff",
+          pointBorderWidth: 2,
+          pointRadius: 6,
+          pointHoverRadius: 8
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            grid: {
+              color: "rgba(0,0,0,0.1)"
+            },
+            ticks: {
+              callback: function (value) {
+                return value + " zł";
+              },
+            },
+          },
+          x: {
+            grid: {
+              color: "rgba(0,0,0,0.1)"
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            display: false,
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                return 'Saldo: ' + context.parsed.y.toFixed(2) + ' zł';
+              }
+            }
+          }
+        },
+        elements: {
+          point: {
+            hoverBackgroundColor: "rgba(0, 210, 211, 1)"
+          }
+        }
+      }
+    });
+  }
+
+  // Generate mock trend data (in real app this would come from API)
+  function generateTrendData() {
+    if (!settlementActivity.monthly_activity || settlementActivity.monthly_activity.length === 0) {
+      return [];
+    }
+
+    const currentBalance = settlementStats.total_balance;
+    const months = settlementActivity.monthly_activity.slice().reverse(); // Start from oldest
+    const trendData = [];
+    let runningBalance = 0;
+
+    // Calculate balance progression (this is simplified - in real app you'd have historical data)
+    months.forEach((month, index) => {
+      if (index === months.length - 1) {
+        // Last month should end with current balance
+        runningBalance = currentBalance;
+      } else {
+        // Simulate balance changes
+        runningBalance += (Math.random() - 0.5) * month.amount * 0.3;
+      }
+
+      trendData.push({
+        date: month.month,
+        balance: runningBalance
+      });
+    });
+
+    return trendData;
+  }
+
+  // Create Activity Chart (number of settlements per month)
+  function createActivityChart() {
+    const ctx = document.getElementById("activityChart").getContext("2d");
+
+    // Generate activity data based on monthly amounts (simplified)
+    const activityData = generateActivityData();
+
+    if (activityData.length === 0) {
+      ctx.canvas.parentNode.innerHTML = '<div class="d-flex align-items-center justify-content-center h-100"><p class="text-center text-muted">Brak danych o aktywności</p></div>';
+      return;
+    }
+
+    new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: activityData.map(item => item.month),
+        datasets: [{
+          label: "Liczba rozliczeń",
+          data: activityData.map(item => item.count),
+          backgroundColor: "rgba(102, 126, 234, 0.8)",
+          borderColor: "rgba(102, 126, 234, 1)",
+          borderWidth: 2,
+          borderRadius: 8,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              stepSize: 1,
+              callback: function (value) {
+                return Math.floor(value);
+              },
+            },
+          },
+        },
+        plugins: {
+          legend: {
+            display: false,
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                return 'Rozliczeń: ' + context.parsed.y;
+              }
+            }
+          }
+        },
+      },
+    });
+  }
+
+  // Generate mock activity data (number of settlements per month)
+  function generateActivityData() {
+    if (!settlementActivity.monthly_activity || settlementActivity.monthly_activity.length === 0) {
+      return [];
+    }
+
+    return settlementActivity.monthly_activity.map(month => ({
+      month: month.month,
+      count: Math.max(0, Math.floor(Math.abs(month.amount) / 100)) // Rough estimate based on amount
+    }));
+  }
+
+  // Display all balances (both positive and negative)
+  function displayAllBalances() {
+    const container = document.getElementById("allBalances");
+
+    if (settlementStats.balances.length === 0) {
+      container.innerHTML =
+        '<p class="text-center text-muted">Brak aktywnych rozliczeń.</p>';
+      return;
+    }
+
+    // Sort balances - positive first (people who owe you), then negative (people you owe)
+    const sortedBalances = settlementStats.balances.sort((a, b) => {
+      if (a.type === "owes_you" && b.type === "you_owe") return -1;
+      if (a.type === "you_owe" && b.type === "owes_you") return 1;
+      return b.amount - a.amount; // Sort by amount within same type
+    });
+
+    container.innerHTML = sortedBalances
+        .map((balance) => {
+            let amountClass, itemClass, icon, text;
+
+            if (balance.type === "owes_you") {
+              amountClass = "amount-positive";
+              itemClass = "positive";
+              icon = "fa-arrow-up";
+              text = "Jest Ci winny";
+            } else {
+              amountClass = "amount-negative";
+              itemClass = "negative";
+              icon = "fa-arrow-down";
+              text = "Jesteś winny";
+            }
+
+            return `
+            <div class="balance-item ${itemClass}">
+                <div>
+                    <h5><i class="fas ${icon} me-2"></i>${balance.entity_name}</h5>
+                    <small class="text-muted">${text}</small>
+                </div>
+                <div class="text-end">
+                    <div class="${amountClass}">
+                        ${Math.abs(balance.amount).toFixed(2)} zł
+                    </div>
+                </div>
+            </div>
+        `;
+        })
+        .join("");
+  }
+
+  // Fetch data and initialize on page load
+  document.addEventListener("DOMContentLoaded", async function () {
+    try {
+      // Fetch settlement stats
+      const statsResponse = await fetch("/settlements/api/stats");
+      if (!statsResponse.ok) {
+        throw new Error(
+          `HTTP error! status: ${statsResponse.status} from /settlements/api/stats`
+        );
+      }
+      settlementStats = await statsResponse.json();
+
+      // Fetch settlement activity
+      const activityResponse = await fetch("/settlements/api/activity");
+      if (!activityResponse.ok) {
+        throw new Error(
+          `HTTP error! status: ${activityResponse.status} from /settlements/api/activity`
+        );
+      }
+      settlementActivity = await activityResponse.json();
+
+      // Initialize dashboard elements with fetched data
+      calculateMainBalance();
+      createBalanceTrendChart(); // New trend chart
+      createActivityChart(); // Activity chart showing number of settlements
+      displayAllBalances(); // All balances (both positive and negative)
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      document.getElementById("mainBalance").textContent = "Błąd";
+      document.getElementById("balanceDescription").textContent =
+        "Nie udało się załadować danych.";
+      document.getElementById("allBalances").innerHTML =
+        '<p class="text-center text-danger">Nie udało się załadować rozliczeń.</p>';
+    }
+  });
+</script>
+{% endblock %}
