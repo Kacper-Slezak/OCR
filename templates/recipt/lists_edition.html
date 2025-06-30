@@ -50,6 +50,12 @@
             font-size: 0.9rem; /* Lekko większa czcionka */
             white-space: nowrap;
         }
+        .price-column-hidden .product-price-input {
+            display: none;
+        }
+        .price-column-hidden #price-header {
+            display: none !important;
+        }
     </style>
 </head>
 <body class="bg-light">
@@ -73,7 +79,10 @@
     <main class="container">
 
         <script>
-            const allFriends = {{ all_friends_json | safe }};
+            const allFriendsJson = {{ all_friends | safe }};
+            const shoppingListItemsJson = {{ shopping_list_items | safe }};
+            const currentListStatus = {{ 'true' if current_list_is_fully_settled else 'false' }};
+            const hasOcrPrices = {{ 'true' if has_ocr_prices else 'false' }};
         </script>
 
         <h1 class="mb-4">Edytuj Listę Zakupów</h1>
@@ -86,7 +95,31 @@
                     <div class="mb-3">
                         <label for="list-name" class="form-label">Nazwa listy zakupów</label>
                         <input type="text" name="list_name" value="{{ list_name }}" placeholder="Nazwa listy" required>
+                        <input type="hidden" name="list_id" value="{{ list_id if list_id is not none else '' }}">
                     </div>
+
+                    <div class="mb-3">
+                        <label class="form-label d-block">Status listy:</label>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="is_fully_settled" id="status_settled" value="True"
+                                   {{ 'checked' if current_list_is_fully_settled else '' }}>
+                            <label class="form-check-label" for="status_settled">Rozliczona</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="is_fully_settled" id="status_unsettled" value="False"
+                                   {{ 'checked' if not current_list_is_fully_settled else '' }}>
+                            <label class="form-check-label" for="status_unsettled">Nierozliczona</label>
+                        </div>
+                    </div>
+
+                    <div id="products-container" class="mb-4 border rounded p-3">
+                        <div class="product-item" id="price-header" style="{{ 'display: flex;' if has_ocr_prices else 'display: none;' }}">
+                            <div class="form-control flex-grow-1" style="border: none; background: transparent;">Nazwa Produktu</div>
+                            <div class="form-control flex-grow-1" style="border: none; background: transparent;">Kto płaci</div>
+                            <div class="form-control product-price-input" style="border: none; background: transparent;">Cena (PLN)</div>
+                            <div style="width: 50px;"></div> </div>
+                    </div>
+
                     <div id="products-container" class="mb-4 border rounded p-3">
                         </div>
 
@@ -131,23 +164,28 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             // Przekazujemy dane z Flaska do JavaScriptu
-            // Jeśli to nowa lista, shoppingListItems będzie puste []
-            const shoppingListItems = JSON.parse('{{ shopping_list_items | safe }}');
-            const allFriends = JSON.parse('{{ all_friends | safe }}'); // Upewnij się, że all_friends są przekazywani!
+            // Bezpośrednie przypisanie, ponieważ dane są już sformatowane jako JS przez | safe
+            const shoppingListItems = {{ shopping_list_items | safe }};
+            const allFriends = {{ all_friends | safe }};
+
+            const hasOcrPrices = {{ 'true' if has_ocr_prices else 'false' }}; // POBIERAMY NOWĄ ZMIENNĄ
 
             const productsContainer = document.getElementById('products-container');
             const addProductButton = document.getElementById('add-product');
-            // Usunąłem friendsListBody, bo w dashboard.html to ma być
-            // const friendsListBody = document.getElementById('friends-list-body');
 
-            let productCounter = 0;
+            const priceHeader = document.getElementById('price-header');
 
-            function createProductItem(product = { name: '', assigned_friends: [] }, index) {
+            let productCounter = 0; // Globalny licznik dla indeksów produktów
+
+            function createProductItem(product = { id: null, name: '', assigned_friends: [] }, index) {
                 const assignedFriends = Array.isArray(product.assigned_friends) ? product.assigned_friends : [];
+
+                const productPrice = product.price !== null ? parseFloat(product.price).toFixed(2) : ''; // Formatowanie ceny
 
                 const div = document.createElement('div');
                 div.classList.add('product-item');
 
+                // Jeśli produkt ma ID (czyli istnieje w bazie), dodaj ukryte pole ID
                 const productIdInput = product.id ? `<input type="hidden" name="products[${index}][id]" value="${product.id}" />` : '';
 
                 div.innerHTML = `
@@ -156,11 +194,13 @@
                            class="form-control flex-grow-1" />
                     <div class="checkbox-container flex-grow-1">
                     </div>
+                    <input type="number" name="products[${index}][price]" value="${productPrice}" placeholder="Cena" step="0.01"
+                           class="form-control product-price-input ${hasOcrPrices ? '' : 'd-none'}" ${hasOcrPrices ? '' : 'readonly'} />
                     <button type="button" class="remove-product btn btn-danger btn-sm">Usuń</button>
                 `;
 
                 const checkboxContainer = div.querySelector('.checkbox-container');
-                allFriends.forEach(friend => { // Używamy allFriends przekazanych z Flaska
+                allFriends.forEach(friend => {
                     const isChecked = assignedFriends.includes(friend.id) ? 'checked' : '';
                     checkboxContainer.innerHTML += `
                         <label class="checkbox-label form-check form-check-inline">
@@ -174,18 +214,18 @@
                 return div;
             }
 
-            // Initialize products from shoppingListItems
+            // Inicjalizuj produkty z shoppingListItems
             if (shoppingListItems.length > 0) {
-                shoppingListItems.forEach((product, idx) => {
+                shoppingListItems.forEach((product) => {
                     productsContainer.appendChild(createProductItem(product, productCounter++));
                 });
             } else {
-                const defaultProduct = { name: 'Woda gazowana', assigned_friends: [] };
-                productsContainer.appendChild(createProductItem(defaultProduct, productCounter++));
+                // Dodaj jeden domyślny produkt dla nowej/pustej listy
+                productsContainer.appendChild(createProductItem({ id: null, name: 'Woda gazowana', assigned_friends: [] }, productCounter++));
             }
 
             addProductButton.addEventListener('click', function() {
-                productsContainer.appendChild(createProductItem({ name: '', assigned_friends: [] }, productCounter++));
+                productsContainer.appendChild(createProductItem({ id: null, name: '', assigned_friends: [] }, productCounter++));
             });
 
             productsContainer.addEventListener('click', function(event) {
@@ -193,7 +233,7 @@
                     const productItem = event.target.closest('.product-item');
                     if (productItem) {
                         productItem.remove();
-                        reindexProducts();
+                        reindexProducts(); // Po usunięciu produktu, ponownie indeksuj pozostałe
                     }
                 }
             });
@@ -201,16 +241,15 @@
             function reindexProducts() {
                 let currentIdx = 0;
                 productsContainer.querySelectorAll('.product-item').forEach(item => {
-                    item.querySelectorAll('input[name^="products["]').forEach(input => {
+                    item.querySelectorAll('input[name^="products["], select[name^="products["]').forEach(input => {
                         const oldName = input.getAttribute('name');
+                        // Zamień indeks w nazwie pola, np. products[X][name] na products[Y][name]
                         input.name = oldName.replace(/products\[\d+\]/, `products[${currentIdx}]`);
                     });
                     currentIdx++;
                 });
-                productCounter = currentIdx;
+                productCounter = currentIdx; // Zaktualizuj licznik, aby nowe produkty miały poprawne indeksy
             }
-
-            // Usunięto logikę wypełniania listy znajomych w edit_shopping_list.html
         });
     </script>
 </body>
