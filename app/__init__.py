@@ -50,7 +50,7 @@ def create_app():
     migrate = Migrate(app, db) # Tutaj możesz też przekazać app do Migrate od razu
 
     mail.init_app(app)
-    scheduler.start
+
 
     # Ustawianie widoku dla niezalogowanych użytkowników
     login_manager.login_view = 'auth.login' # Załóżmy, że masz Blueprint 'auth' z logowaniem
@@ -59,16 +59,14 @@ def create_app():
 
     # Importowanie blueprints
     from .routes import auth
-    from .routes import ocr
 
 
     from .routes.main import bp as main_bp
     from .routes.receipt import receipt_bp
-    from .routes import settlements  # <-- DODAJ TEN IMPORT
+    from .routes import settlements
     from app.routes.notifications import notifications_bp
     # Rejestrowanie blueprints w aplikacji
-    app.register_blueprint(auth.bp) # Zarejestruj auth blueprint
-    app.register_blueprint(ocr.bp)   # Zarejestruj ocr blueprint
+    app.register_blueprint(auth.bp)
     app.register_blueprint(main_bp)
 
     app.register_blueprint(receipt_bp)

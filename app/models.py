@@ -75,13 +75,15 @@ class ShoppingList(db.Model):
     created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.now)
     is_completed = db.Column(db.Boolean, default=False)
-    # NOWA KOLUMNA: Status rozliczenia całej listy
     is_fully_settled = db.Column(db.Boolean, default=False, nullable=False)
 
     # Relacje
     products = db.relationship('Product', backref='shopping_list', lazy='dynamic', cascade='all, delete-orphan')
     settlements = db.relationship('Settlement', backref='shopping_list_ref', lazy='dynamic',
                                   cascade='all, delete-orphan')
+    # NOWA RELACJA: Lista zakupów może mieć wiele paragonów
+    receipts = db.relationship('Receipt', backref='shopping_list_ref', lazy='dynamic', cascade='all, delete-orphan')
+
 
     def __repr__(self):
         return f'<ShoppingList {self.name}>'
@@ -163,6 +165,8 @@ class Settlement(db.Model):
 class Receipt(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    # NOWA KOLUMNA: Powiązanie paragonu z listą zakupów
+    shopping_list_id = db.Column(db.Integer, db.ForeignKey('shopping_list.id'), nullable=True)
     file_path = db.Column(db.String(255), nullable=False)
     upload_date = db.Column(db.DateTime, default=datetime.now)
     status = db.Column(db.String(50),

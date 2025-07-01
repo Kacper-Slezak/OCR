@@ -46,7 +46,7 @@
                 <div class="card shadow-sm p-4 mb-4">
                     <h2 class="h4 mb-3">Twoje Listy Zakupów</h2>
                     {# POPRAWKA: Zmieniono 'receipt.lists_edition' na 'receipt.edit_shopping_list' #}
-                    <a href="{{ url_for('receipt.lists_edition') }}" class="btn btn-primary mb-3">Stwórz Nową Listę</a>
+                    <a href="{{ url_for('receipt.edit_shopping_list') }}" class="btn btn-primary mb-3">Stwórz Nową Listę</a>
 
                     {# Przycisk do obliczania rozliczeń dla wszystkich list #}
                     {# POPRAWKA: Action już jest poprawnie na main.calculate_all_unsettled_lists #}
@@ -81,7 +81,7 @@
                                         </td>
                                         <td>
                                             {# POPRAWKA: Zmieniono 'receipt.lists_edition' na 'receipt.edit_shopping_list' #}
-                                            <a href="{{ url_for('receipt.lists_edition', list_id=list.id) }}" class="btn btn-sm btn-info me-2">Edytuj</a>
+                                            <a href="{{ url_for('receipt.edit_shopping_list', list_id=list.id) }}" class="btn btn-sm btn-info me-2">Edytuj</a>
                                             <form action="{{ url_for('receipt.delete_shopping_list', list_id=list.id) }}" method="POST" style="display:inline;">
                                                 <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Czy na pewno chcesz usunąć tę listę?');">Usuń</button>
                                             </form>
