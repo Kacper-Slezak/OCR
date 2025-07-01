@@ -374,7 +374,7 @@ def eksportuj_transakcje_csv():
     Generuje plik CSV ze wszystkimi rekordami Settlement
     """
     # Nagłówki kolumn
-    naglowki = ['ID', 'ID listy', 'ID dłużnika', 'ID wierzyciela',
+    naglowki = ['ID', 'ID listy', 'ID dluznika', 'ID wierzyciela',
                 'Kwota', 'Utworzono', 'Rozliczono', 'Status']
 
     # Przygotowanie bufora CSV

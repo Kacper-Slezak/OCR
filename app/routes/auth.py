@@ -26,12 +26,11 @@ def login():
 
     form = LoginForm()
     if form.validate_on_submit():
-        identifier = form.username_or_email.data
+        email = form.email.data
         password = form.password.data
         remember = form.remember_me.data
 
-        user = User.query.filter_by(username=identifier).first() or \
-               User.query.filter_by(email=identifier).first()
+        user = User.query.filter_by(email=email).first()
 
         if user and user.check_password(password):
             if not user.email_confirmed:
@@ -51,15 +50,22 @@ def login():
 def register():
     form = RegistrationForm()
     if form.validate_on_submit():
+        email = form.email.data
+
+        if User.query.filter_by(email=email).first():
+            flash('Ten adres e-mail jest już zajęty. Użyj innego.', 'danger')
+            return redirect(url_for('auth.register'))
+
         new_user = User(
             username=form.username.data,
-            email=form.email.data
+            email=email
         )
         new_user.set_password(form.password.data)
+
         db.session.add(new_user)
         db.session.commit()
 
-        token = generate_confirmation_token(new_user.email)
+        token = generate_confirmation_token(email)
         confirm_url = url_for('auth.confirm_email', token=token, _external=True)
         temat = "Potwierdź swój adres e-mail"
         tresc = (
@@ -67,9 +73,9 @@ def register():
             f"Aby ukończyć rejestrację, kliknij w link:\n{confirm_url}\n\n"
             "Jeśli to nie Ty, zignoruj tę wiadomość."
         )
-        wyslij_email(new_user.email, temat, tresc)
+        wyslij_email(email, temat, tresc)
 
-        flash('Rejestracja prawie zakończona! Sprawdź skrzynkę pocztową i potwierdź e-mail.', 'info')
+        flash('Sprawdź swoją skrzynkę e-mail i potwierdź adres, aby dokończyć rejestrację.', 'info')
         return redirect(url_for('auth.login'))
 
     return render_template('auth/register.html', form=form)

@@ -5,8 +5,8 @@
   <form method="POST" action="{{ url_for('auth.login') }}">
       {{ form.hidden_tag() }}
       <div class="mb-3">
-          {{ form.username_or_email.label }}
-          {{ form.username_or_email(class="form-control") }}
+          {{ form.email.label }}
+          {{ form.email(class="form-control") }}
       </div>
       <div class="mb-3">
           {{ form.password.label }}
