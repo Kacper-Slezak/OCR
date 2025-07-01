@@ -2,7 +2,7 @@
 
 {% block content %}
 <div class="container mt-4">
-    <h1 class="mb-3">Edytuj Paragon #{{ receipt.id }}</h1>
+    <h1 class="mb-3">Edytuj Paragon #{{ receipt.id }} do listy zakupów #{{ receipt.shopping_list_id }}</h1>
     <p class="text-muted">Status: <strong>{{ receipt.status }}</strong> | Data: {{ receipt.upload_date.strftime('%Y-%m-%d %H:%M') }}</p>
 
     <form method="POST" action="{{ url_for('ocr.edit_receipt', receipt_id=receipt.id) }}">

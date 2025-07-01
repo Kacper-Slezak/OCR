@@ -4,6 +4,7 @@ from flask_login import login_required, current_user
 from app import db
 # Zmień Receipt na ShoppingList, jeśli to ten model przechowuje listy zakupów
 from app.models import ShoppingList, Friend, Product # <--- WAŻNE: Dodaj Friend i Product
+from app.services.ocr_services import process_receipt_image
 
 
 receipt_bp = Blueprint('receipt', __name__, url_prefix='/lists_edition')
@@ -47,6 +48,49 @@ def lists_edition(list_id=None):
         list_id=list_id,
         list_name=list_name  # Przekaż nazwę listy do szablonu
     )
+# pewnie do wywalenia, latwiej pewnie doadaptowac to co jest juz w ocrze
+@receipt_bp.route('/upload', methods=['POST'])
+@login_required
+def upload_receipt(receipt_id):
+    list_id = request.form.get('list_id')
+    if 'file' not in request.files:
+        flash('Brak części pliku w żądaniu.', 'error')
+        return redirect(request.url)
+
+    file = request.files['file']
+
+    if file.filename == '':
+        flash('Nie wybrano pliku.', 'error')
+        return redirect(request.url)
+
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        upload_folder = current_app.config['UPLOAD_FOLDER']
+        os.makedirs(upload_folder, exist_ok=True)
+        file_path = os.path.join(upload_folder, filename)
+        file.save(file_path)
+
+        new_receipt = Receipt(
+            id=receipt_id,
+            user_id=current_user.id,
+            file_path=file_path,
+            shopping_list_id=list_id,
+            status='uploaded'
+        )
+        db.session.add(new_receipt)
+        db.session.commit()
+
+        try:
+            process_receipt_image(new_receipt.id, file_path)
+            flash('Paragon przesłany i przetwarzanie OCR rozpoczęte!', 'success')
+        except Exception as e:
+            print(f"Błąd podczas uruchamiania serwisu OCR dla paragonu {new_receipt.id}: {e}")
+            flash(f'Wystąpił błąd podczas przetwarzania paragonu: {e}', 'error')
+            db.session.rollback()
+            new_receipt.status = 'error_during_processing_init'
+            db.session.commit()
+
+    return redirect(url_for('ocr.edit_receipt', receipt_id=new_receipt.id))
 
 # Usunięcie całej funkcji save_shopping_list, ponieważ jej logika została przeniesiona do main.py
 # @receipt_bp.route('/save', methods=['POST'])

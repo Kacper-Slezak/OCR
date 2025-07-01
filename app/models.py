@@ -169,6 +169,7 @@ class Receipt(db.Model):
                        default='uploaded')  # Status przetwarzania: 'uploaded', 'processing', 'processed', 'error'
     raw_text = db.Column(db.Text, nullable=True)  # Surowy tekst z OCR
     processed_data = db.Column(db.Text, nullable=True)  # Sparsowane dane w formacie JSON jako string
+    shopping_list_id = db.Column(db.Integer, db.ForeignKey('shopping_list.id'), nullable=True)
 
     # Relacja: Paragon może mieć wiele produktów (jeśli Product ma receipt_id)
     products_from_receipt = db.relationship('Product', backref='source_receipt', lazy='dynamic',

@@ -119,8 +119,14 @@
                         </table>
                     </div>
                 </div>
+                <!-- tutaj probowalem zrobic formsa, moze latwiej bedzie przekierowac na */
+                 domene do przesylania tylko pamietac o tym z jakiej listy zakupow przeszlismy -->
                 <div class="Add recipt">
-                    <a href="{{ url_for('ocr.upload_receipt') }}">Dodaj paragon</a>
+                    <form method="POST" enctype="multipart/form-data" action="/upload">
+                        <input type="file" name="file" accept="image/*">
+                        <input type="hidden" name="list_id" value="{{ list_id }}">
+                        <input type="submit" value="Upload">
+                    </form>
                 </div>
             </div>
         </div>
