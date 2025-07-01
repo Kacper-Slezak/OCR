@@ -72,16 +72,17 @@ class User(db.Model, UserMixin):
 class ShoppingList(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)g
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.now)
     is_completed = db.Column(db.Boolean, default=False)
-    # NOWA KOLUMNA: Status rozliczenia całej listy
-    is_fully_settled = db.Column(db.Boolean, default=False, nullable=False)
+    is_fully_settled = db.Column(db.Boolean, default=False, nullable=False)  # Dodano is_fully_settled
 
     # Relacje
     products = db.relationship('Product', backref='shopping_list', lazy='dynamic', cascade='all, delete-orphan')
     settlements = db.relationship('Settlement', backref='shopping_list_ref', lazy='dynamic',
                                   cascade='all, delete-orphan')
+    receipts = db.relationship('Receipt', backref='shopping_list_ref', lazy='dynamic',
+                               cascade='all, delete-orphan')  # Dodano receipts
 
     def __repr__(self):
         return f'<ShoppingList {self.name}>'
@@ -97,7 +98,8 @@ class Product(db.Model):
     assigned_friends_for_product = db.relationship(
         'Friend',
         secondary=product_friend_assignment,
-        back_populates='assigned_products'
+        back_populates='assigned_products',
+        cascade='all'
     )
 
     paid_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)  # Kto faktycznie zapłacił
@@ -123,10 +125,10 @@ class Settlement(db.Model):
     amount = db.Column(db.Numeric(10, 2), nullable=False)
     is_settled = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.now)
-    settled_at = db.Column(db.DateTime, nullable=True)
+    settled_at = db.Column(db.DateTime, nullable=True)  # Data uregulowania
 
     # Sprawdzenie, czy tylko jeden z pól dłużnika/wierzyciela jest wypełniony
-    __table_args__ = (
+    _table_args_ = (
         db.CheckConstraint(
             '(debtor_user_id IS NOT NULL AND debtor_friend_id IS NULL) OR '
             '(debtor_user_id IS NULL AND debtor_friend_id IS NOT NULL)',
@@ -163,14 +165,14 @@ class Settlement(db.Model):
 class Receipt(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    shopping_list_id = db.Column(db.Integer, db.ForeignKey('shopping_list.id'),
+                                 nullable=True)  # Powiązanie paragonu z listą zakupów
     file_path = db.Column(db.String(255), nullable=False)
     upload_date = db.Column(db.DateTime, default=datetime.now)
     status = db.Column(db.String(50),
                        default='uploaded')  # Status przetwarzania: 'uploaded', 'processing', 'processed', 'error'
     raw_text = db.Column(db.Text, nullable=True)  # Surowy tekst z OCR
     processed_data = db.Column(db.Text, nullable=True)  # Sparsowane dane w formacie JSON jako string
-    # NOWA Kolumna:
-    shopping_list_id = db.Column(db.Integer, db.ForeignKey('shopping_list.id'), nullable=True)
 
     # Relacja: Paragon może mieć wiele produktów (jeśli Product ma receipt_id)
     products_from_receipt = db.relationship('Product', backref='source_receipt', lazy='dynamic',
@@ -192,7 +194,7 @@ class Friend(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(120), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  # Kto jest właścicielem tego znajomego
 
     # Relacja z produktami – wiele do wielu (produkty przypisane do tego znajomego)
     assigned_products = db.relationship(

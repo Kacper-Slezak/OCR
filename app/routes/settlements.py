@@ -2,12 +2,12 @@
 from decimal import Decimal
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
-from app import db  # Zakładam, że 'db' to instancja SQLAlchemy
-from app.models import ShoppingList, Settlement, User, Friend, Product  # Upewnij się, że User i Friend są zaimportowane
-from app.services.settlements_services import calculate_settlements, _check_and_update_list_settlement_status
+from app import db
+from app.models import ShoppingList, Settlement, User, Friend, Product
+from app.services.settlements_services import calculate_settlements, check_and_update_list_settlement_status
 from datetime import datetime, timedelta
 from collections import defaultdict
-from sqlalchemy import func, extract  # func do agregacji, extract do wyciągania części daty
+from sqlalchemy import func, or_
 
 bp = Blueprint('settlements', __name__, url_prefix='/settlements')
 
@@ -16,12 +16,10 @@ bp = Blueprint('settlements', __name__, url_prefix='/settlements')
 @login_required
 def settlements_dashboard():
     """
-    Dashboard rozliczeń z wykresami - skupiony na wizualizacji danych.
+    Dashboard rozliczeń z wykresami i podsumowaniem.
     Ta trasa renderuje szablon HTML z canvasami dla wykresów.
-    Dane do wykresów i ostatnich list są pobierane asynchronicznie przez JavaScript z API endpointów.
+    Dane do wykresów i szczegółów rozliczeń są pobierane asynchronicznie przez JavaScript z API endpointów.
     """
-    # Ścieżka do szablonu powinna być poprawna. Jeśli Twój settlements_dashboard.html jest w
-    # templates/settlements/dashboard_with_charts.html, to ta linia jest OK.
     return render_template('settlements/dashboard_with_charts.html')
 
 
@@ -32,92 +30,121 @@ def get_settlement_stats():
     API endpoint zwracający statystyki rozliczeń dla zalogowanego użytkownika.
     Dostarcza dane dla przeglądu bilansu netto i wydatków na listy.
     """
-    user_id = current_user.id  # Pobierz ID zalogowanego użytkownika
+    user_id = current_user.id
 
     total_balance = Decimal('0.00')
-    balances = []
+    unsettled_transactions_data = []  # Zmieniono nazwę z 'balances' na 'unsettled_transactions_data'
     spending_per_list = {}
 
     try:
         # 1. Obliczanie total_balance (całkowite saldo netto dla zalogowanego użytkownika)
         # Suma należności (inni są winni Tobie) - Suma zobowiązań (Ty jesteś winien innym)
-        # Bierzemy pod uwagę rozliczenia, gdzie user_id jest wierzycielem lub dłużnikiem.
-        # W modelu Settlement są pola `debtor_user_id`, `creditor_user_id`
-        # oraz `debtor_friend_id`, `creditor_friend_id`.
-        # Poniższe zapytanie skupia się na rozliczeniach, gdzie UŻYTKOWNIK jest bezpośrednio stroną.
-        # Jeśli rozliczenia z przyjaciółmi są reprezentowane przez Friend.user_id = current_user.id,
-        # to logika może być bardziej złożona lub wymagać dodatkowych zapytań/joins.
-        # Na razie zakładamy bezpośrednie rozliczenia między User-User.
+        # Bierzemy pod uwagę rozliczenia, gdzie current_user jest wierzycielem/dłużnikiem
+        # ORAZ gdzie znajomy current_user jest wierzycielem/dłużnikiem.
 
-        # Suma należności (Ty jesteś wierzycielem)
-        creditor_sum = db.session.query(func.sum(Settlement.amount)).filter(
-            Settlement.creditor_user_id == user_id
+        # Saldo z rozliczeń, gdzie użytkownik jest stroną
+        user_creditor_sum = db.session.query(func.sum(Settlement.amount)).filter(
+            Settlement.creditor_user_id == user_id,
+            Settlement.is_settled == False
         ).scalar() or Decimal('0.00')
 
-        # Suma zobowiązań (Ty jesteś dłużnikiem)
-        debtor_sum = db.session.query(func.sum(Settlement.amount)).filter(
-            Settlement.debtor_user_id == user_id
+        user_debtor_sum = db.session.query(func.sum(Settlement.amount)).filter(
+            Settlement.debtor_user_id == user_id,
+            Settlement.is_settled == False
         ).scalar() or Decimal('0.00')
 
-        total_balance = creditor_sum - debtor_sum
+        # Saldo z rozliczeń, gdzie znajomy użytkownika jest stroną
+        # Sumujemy należności znajomych (dodatnie saldo dla użytkownika)
+        friend_creditor_sum = db.session.query(func.sum(Settlement.amount)).join(
+            Friend, Settlement.creditor_friend_id == Friend.id
+        ).filter(
+            Friend.user_id == user_id,
+            Settlement.is_settled == False
+        ).scalar() or Decimal('0.00')
 
-        # 2. Szczegółowe salda (kto komu jest winien/jesteś winien)
-        # Rozliczenia, gdzie inni użytkownicy są dłużnikami wobec Ciebie
-        owed_to_you = db.session.query(
-            User.username, func.sum(Settlement.amount)
-        ).join(Settlement, User.id == Settlement.debtor_user_id).filter(
-            Settlement.creditor_user_id == user_id
-        ).group_by(User.username).all()
+        # Sumujemy zobowiązania znajomych (ujemne saldo dla użytkownika)
+        friend_debtor_sum = db.session.query(func.sum(Settlement.amount)).join(
+            Friend, Settlement.debtor_friend_id == Friend.id
+        ).filter(
+            Friend.user_id == user_id,
+            Settlement.is_settled == False
+        ).scalar() or Decimal('0.00')
 
-        # Rozliczenia, gdzie znajomi są dłużnikami wobec Ciebie
-        owed_to_you_friends = db.session.query(
-            Friend.name, func.sum(Settlement.amount)
-        ).join(Settlement, Friend.id == Settlement.debtor_friend_id).filter(
-            Settlement.creditor_user_id == user_id
-        ).group_by(Friend.name).all()
+        total_balance = (user_creditor_sum + friend_creditor_sum) - \
+                        (user_debtor_sum + friend_debtor_sum)
 
-        for name, amount in owed_to_you:
-            balances.append({'entity_name': name, 'amount': float(amount), 'type': 'owes_you'})
-        for name, amount in owed_to_you_friends:
-            balances.append({'entity_name': name, 'amount': float(amount), 'type': 'owes_you'})
+        # 2. Szczegółowe nierozliczone transakcje
+        # Pobieramy wszystkie nierozliczone rozliczenia, w których użytkownik jest bezpośrednio stroną
+        # LUB gdzie znajomy użytkownika jest stroną
+        unsettled_settlements = db.session.query(Settlement).filter(
+            or_(
+                Settlement.debtor_user_id == user_id,
+                Settlement.creditor_user_id == user_id,
+                Settlement.debtor_friend_id.in_(db.session.query(Friend.id).filter(Friend.user_id == user_id)),
+                Settlement.creditor_friend_id.in_(db.session.query(Friend.id).filter(Friend.user_id == user_id))
+            ),
+            Settlement.is_settled == False
+        ).all()
 
-        # Rozliczenia, gdzie Ty jesteś dłużnikiem wobec innych użytkowników
-        you_owe = db.session.query(
-            User.username, func.sum(Settlement.amount)
-        ).join(Settlement, User.id == Settlement.creditor_user_id).filter(
-            Settlement.debtor_user_id == user_id
-        ).group_by(User.username).all()
+        for s in unsettled_settlements:
+            debtor_name = "N/A"
+            if s.debtor_user:
+                debtor_name = s.debtor_user.username
+            elif s.debtor_friend:
+                debtor_name = s.debtor_friend.name
 
-        # Rozliczenia, gdzie Ty jesteś dłużnikiem wobec znajomych
-        you_owe_friends = db.session.query(
-            Friend.name, func.sum(Settlement.amount)
-        ).join(Settlement, Friend.id == Settlement.creditor_friend_id).filter(
-            Settlement.debtor_user_id == user_id
-        ).group_by(Friend.name).all()
+            creditor_name = "N/A"
+            if s.creditor_user:
+                creditor_name = s.creditor_user.username
+            elif s.creditor_friend:
+                creditor_name = s.creditor_friend.name
 
-        for name, amount in you_owe:
-            balances.append({'entity_name': name, 'amount': float(amount), 'type': 'you_owe'})
-        for name, amount in you_owe_friends:
-            balances.append({'entity_name': name, 'amount': float(amount), 'type': 'you_owe'})
+            # Określ typ transakcji z perspektywy zalogowanego użytkownika
+            # 'owes_you' jeśli ktoś (użytkownik lub jego znajomy) jest wierzycielem, a druga strona dłużnikiem
+            # 'you_owe' jeśli ktoś (użytkownik lub jego znajomy) jest dłużnikiem, a druga strona wierzycielem
+            transaction_type = ''
+            if (s.creditor_user_id == user_id) or (s.creditor_friend_id and s.creditor_friend.user_id == user_id):
+                transaction_type = 'owes_you'
+            elif (s.debtor_user_id == user_id) or (s.debtor_friend_id and s.debtor_friend.user_id == user_id):
+                transaction_type = 'you_owe'
+
+            unsettled_transactions_data.append({
+                'id': s.id,
+                'debtor_name': debtor_name,
+                'creditor_name': creditor_name,
+                'amount': float(s.amount),
+                'shopping_list_name': s.shopping_list_ref.name if s.shopping_list_ref else 'N/A',
+                'type': transaction_type
+            })
 
         # 3. Wydatki na Listy Zakupów
-        # Zgodnie z Product modelem, Product ma price (Numeric) i shopping_list_id
-        # Nie ma kolumny quantity w Product, więc sumujemy tylko ceny.
+        # Sumujemy ceny wszystkich produktów na listach, w których użytkownik jest twórcą lub uczestnikiem
+
+        # Pobierz ID wszystkich list, w których użytkownik jest twórcą lub uczestnikiem
+        user_related_list_ids = db.session.query(ShoppingList.id).filter(
+            or_(
+                ShoppingList.created_by == user_id,
+                ShoppingList.participants.any(User.id == user_id)
+            )
+        ).subquery()
+
+        # Sumuj ceny produktów tylko z tych list
         spending_data = db.session.query(
             ShoppingList.name, func.sum(Product.price)
-        ).join(Product, ShoppingList.id == Product.shopping_list_id).group_by(ShoppingList.name).all()
+        ).join(Product, ShoppingList.id == Product.shopping_list_id).filter(
+            ShoppingList.id.in_(user_related_list_ids)
+        ).group_by(ShoppingList.name).all()
 
         for list_name, total_spent in spending_data:
             spending_per_list[list_name] = float(total_spent or 0.0)
 
     except Exception as e:
-        # Obsługa błędów, jeśli coś pójdzie nie tak z bazą danych
         print(f"Błąd podczas pobierania statystyk rozliczeń: {e}")
         return jsonify({'error': 'Nie udało się pobrać statystyk rozliczeń'}, 500)
 
     return jsonify({
         'total_balance': float(total_balance),
-        'balances': balances,
+        'unsettled_transactions': unsettled_transactions_data,  # Zmieniono nazwę klucza
         'spending_per_list': spending_per_list
     })
 
@@ -127,19 +154,28 @@ def get_settlement_stats():
 def get_settlement_activity():
     """
     API endpoint zwracający dane o aktywności rozliczeń (liczba rozliczeń na miesiąc).
+    Uwzględnia rozliczenia, w których użytkownik jest bezpośrednio stroną lub jego znajomy.
     """
     user_id = current_user.id
     monthly_activity = []
 
     try:
-        # W Settlement jest kolumna 'created_at' typu DateTime
-        # Używamy func.strftime dla SQLite lub func.to_char dla PostgreSQL/MySQL
-        # Dla SQLite: '%Y-%m' to format 'YYYY-MM'
+        # Złożone zapytanie, aby uwzględnić rozliczenia, gdzie użytkownik jest bezpośrednio stroną
+        # LUB gdzie znajomy użytkownika jest stroną
         activity_data = db.session.query(
             func.strftime('%Y-%m', Settlement.created_at),
             func.count(Settlement.id)
         ).filter(
-            (Settlement.creditor_user_id == user_id) | (Settlement.debtor_user_id == user_id)
+            or_(
+                (Settlement.creditor_user_id == user_id),
+                (Settlement.debtor_user_id == user_id),
+                (Settlement.creditor_friend_id.in_(
+                    db.session.query(Friend.id).filter(Friend.user_id == user_id)
+                )),
+                (Settlement.debtor_friend_id.in_(
+                    db.session.query(Friend.id).filter(Friend.user_id == user_id)
+                ))
+            )
         ).group_by(
             func.strftime('%Y-%m', Settlement.created_at)
         ).order_by(
@@ -162,59 +198,62 @@ def get_settlement_activity():
 def get_settlement_trends():
     """
     API endpoint zwracający dane o trendach salda w czasie (saldo netto w kolejnych tygodniach).
+    Uwzględnia rozliczenia, w których użytkownik jest bezpośrednio stroną lub jego znajomy.
     """
     user_id = current_user.id
     trends_data = []
 
     try:
-        # Obliczanie trendów salda wymaga bardziej złożonej logiki,
-        # ponieważ saldo jest sumą wszystkich rozliczeń do danego punktu w czasie.
-        # Będziemy symulować to, pobierając wszystkie rozliczenia użytkownika
-        # i agregując je tygodniowo.
-
-        # Pobierz wszystkie rozliczenia dla danego użytkownika, posortowane chronologicznie
+        # Pobierz wszystkie rozliczenia dla danego użytkownika (lub jego znajomych), posortowane chronologicznie
         all_settlements = db.session.query(Settlement).filter(
-            (Settlement.creditor_user_id == user_id) | (Settlement.debtor_user_id == user_id)
+            or_(
+                (Settlement.creditor_user_id == user_id),
+                (Settlement.debtor_user_id == user_id),
+                (Settlement.creditor_friend_id.in_(
+                    db.session.query(Friend.id).filter(Friend.user_id == user_id)
+                )),
+                (Settlement.debtor_friend_id.in_(
+                    db.session.query(Friend.id).filter(Friend.user_id == user_id)
+                ))
+            )
         ).order_by(Settlement.created_at).all()
 
         current_balance = Decimal('0.00')
-        weekly_balances = defaultdict(Decimal)  # Używamy defaultdict do przechowywania salda na koniec każdego tygodnia
+        weekly_balances = defaultdict(Decimal)
 
-        # Iteruj przez rozliczenia i aktualizuj saldo
         for settlement in all_settlements:
-            if settlement.creditor_user_id == user_id:
+            # Określ, czy rozliczenie wpływa na saldo zalogowanego użytkownika
+            # Użytkownik jest wierzycielem LUB znajomy użytkownika jest wierzycielem
+            is_user_or_friend_creditor = (settlement.creditor_user_id == user_id) or \
+                                         (
+                                                     settlement.creditor_friend_id and settlement.creditor_friend.user_id == user_id)
+
+            # Użytkownik jest dłużnikiem LUB znajomy użytkownika jest dłużnikiem
+            is_user_or_friend_debtor = (settlement.debtor_user_id == user_id) or \
+                                       (settlement.debtor_friend_id and settlement.debtor_friend.user_id == user_id)
+
+            if is_user_or_friend_creditor:
                 current_balance += settlement.amount
-            elif settlement.debtor_user_id == user_id:
+            elif is_user_or_friend_debtor:
                 current_balance -= settlement.amount
 
-            # Ustaw saldo dla tygodnia, w którym rozliczenie zostało utworzone
-            # Na koniec tygodnia saldo jest równe sumie wszystkich transakcji do tego momentu
-            # datetime.isocalendar() zwraca (year, week_number, day_of_week)
             year, week_num, _ = settlement.created_at.isocalendar()
-            week_key = f"{year}-{week_num:02d}"  # Format 'YYYY-WW'
+            week_key = f"{year}-{week_num:02d}"
 
-            weekly_balances[week_key] = current_balance  # Zapisz saldo na koniec tygodnia
+            weekly_balances[week_key] = current_balance
 
-        # Generowanie danych dla ostatnich 12 tygodni (wstecz od bieżącego tygodnia)
         end_date = datetime.now()
-        for i in range(12):
+        for i in range(12):  # Ostatnie 12 tygodni
             week_date = end_date - timedelta(weeks=i)
             year, week_num, _ = week_date.isocalendar()
             week_key = f"{year}-{week_num:02d}"
 
-            # Oblicz datę początku tygodnia (dla etykiety)
-            # isocalendar zwraca poniedziałek jako 1, niedziela jako 7.
-            # timedelta(days=weekday) daje nam początek bieżącego tygodnia (poniedziałek)
-            # Weekday w isocalendar jest 1-indexed (1=Pon, ..., 7=Niedz).
-            # Python's weekday() jest 0-indexed (0=Pon, ..., 6=Niedz).
-            # Aby uzyskać początek tygodnia (poniedziałek) z daty:
             start_of_week = week_date - timedelta(days=week_date.weekday())
-            week_label = start_of_week.strftime('%Y-%m-%d')  # Etykieta 'RRRR-MM-DD'
+            week_label = start_of_week.strftime('%Y-%m-%d')
 
-            # Pobierz saldo z defaultdict (jeśli brak, to 0)
             balance_for_week = weekly_balances.get(week_key, Decimal('0.00'))
 
-            trends_data.insert(0, {  # Dodaj na początek listy, aby były chronologicznie
+            trends_data.insert(0, {
                 'week': week_label,
                 'total_amount': float(balance_for_week)
             })
@@ -225,5 +264,99 @@ def get_settlement_trends():
 
     return jsonify({'trends': trends_data})
 
-# Pamiętaj, aby zarejestrować blueprint 'bp' w main.py (jeśli jeszcze tego nie zrobiłeś)
-# np. app.register_blueprint(bp)
+
+@bp.route('/list/<int:list_id>/calculate', methods=['POST'])
+@login_required
+def calculate_list_settlements(list_id):
+    """
+    Oblicza rozliczenia dla pojedynczej listy zakupów.
+    (Ta trasa jest używana wewnętrznie lub w specyficznych przypadkach,
+    główny przycisk do obliczeń jest teraz na dashboardzie głównym).
+    """
+    shopping_list = ShoppingList.query.get(list_id)
+    if not shopping_list:
+        flash('Lista zakupów nie została znaleziona.', 'error')
+        return redirect(url_for('settlements.settlements_dashboard'))
+
+    is_creator = (shopping_list.created_by == current_user.id)
+    is_participant = current_user in shopping_list.participants.all()
+
+    if not (is_creator or is_participant):
+        flash('Nie masz uprawnień do obliczania rozliczeń dla tej listy.', 'error')
+        return redirect(url_for('settlements.settlements_dashboard'))
+
+    # Wyczyść istniejące rozliczenia dla tej listy przed ponownym przeliczeniem
+    Settlement.query.filter_by(shopping_list_id=list_id).delete()
+    db.session.commit()
+
+    new_settlements = calculate_settlements(list_id)
+    if new_settlements:
+        flash(f'Rozliczenia dla listy "{shopping_list.name}" zostały pomyślnie obliczone i zapisane.', 'success')
+    else:
+        flash(f'Nie udało się wygenerować rozliczeń dla listy "{shopping_list.name}" lub brak danych do rozliczenia.',
+              'info')
+
+    return redirect(url_for('settlements.settlements_dashboard'))
+
+
+@bp.route('/settle/<int:settlement_id>', methods=['POST'])
+@login_required
+def settle_single_transaction(settlement_id):
+    """
+    Oznacza pojedyncze rozliczenie jako opłacone.
+    Tylko zalogowany użytkownik, który jest dłużnikiem LUB wierzycielem w tej transakcji, może ją oznaczyć.
+    """
+    settlement = Settlement.query.get_or_404(settlement_id)
+
+    # Sprawdź, czy zalogowany użytkownik jest stroną w tej transakcji
+    is_user_debtor = (settlement.debtor_user_id == current_user.id)
+    is_user_creditor = (settlement.creditor_user_id == current_user.id)
+
+    # Sprawdź, czy zalogowany użytkownik jest właścicielem znajomego będącego stroną
+    is_friend_debtor_owned = (settlement.debtor_friend_id and settlement.debtor_friend.user_id == current_user.id)
+    is_friend_creditor_owned = (settlement.creditor_friend_id and settlement.creditor_friend.user_id == current_user.id)
+
+    if not (is_user_debtor or is_user_creditor or is_friend_debtor_owned or is_friend_creditor_owned):
+        flash('Nie masz uprawnień do oznaczenia tego rozliczenia.', 'error')
+        return redirect(url_for('settlements.settlements_dashboard'))
+
+    if settlement.is_settled:
+        flash('To rozliczenie jest już oznaczone jako opłacone.', 'info')
+    else:
+        settlement.is_settled = True
+        settlement.settled_at = datetime.now()
+        db.session.commit()
+        flash('Rozliczenie zostało pomyślnie oznaczone jako opłacone.', 'success')
+
+        # Po uregulowaniu pojedynczego rozliczenia, sprawdź status całej listy
+        check_and_update_list_settlement_status(settlement.shopping_list_id)
+
+    return redirect(url_for('settlements.settlements_dashboard'))
+
+
+@bp.route('/history')
+@login_required
+def settlement_history():
+    """
+    Wyświetla historię wszystkich rozliczeń użytkownika (opłaconych i nieopłaconych).
+    Uwzględnia rozliczenia, w których użytkownik jest bezpośrednio stroną lub jego znajomy.
+    """
+    user_id = current_user.id
+
+    # Pobieramy wszystkie rozliczenia, w których użytkownik był dłużnikiem LUB wierzycielem
+    # LUB gdzie znajomy użytkownika był dłużnikiem LUB wierzycielem
+    all_settlements = db.session.query(Settlement).filter(
+        or_(
+            (Settlement.debtor_user_id == user_id),
+            (Settlement.creditor_user_id == user_id),
+            (Settlement.debtor_friend_id.in_(
+                db.session.query(Friend.id).filter(Friend.user_id == user_id)
+            )),
+            (Settlement.creditor_friend_id.in_(
+                db.session.query(Friend.id).filter(Friend.user_id == user_id)
+            ))
+        )
+    ).order_by(Settlement.created_at.desc()).all()
+
+    return render_template('settlements/history.html', all_settlements=all_settlements)
+

@@ -5,7 +5,7 @@ from app import db
 from app.models import Product, ShoppingList, Settlement, User  # Upewnij się, że User i Friend są zaimportowane
 
 
-def _check_and_update_list_settlement_status(shopping_list_id):
+def check_and_update_list_settlement_status(shopping_list_id):
     """
     Sprawdza, czy wszystkie rozliczenia dla danej listy zakupów zostały uregulowane.
     Jeśli tak, ustawia is_fully_settled na True dla ShoppingList.
@@ -164,7 +164,7 @@ def calculate_settlements(shopping_list_id):
         db.session.commit()
         print(
             f"DEBUG: calculate_settlements: Wygenerowano {len(generated_settlements)} rozliczeń dla listy {shopping_list_id}.")
-        _check_and_update_list_settlement_status(shopping_list_id)
+        check_and_update_list_settlement_status(shopping_list_id)
         return generated_settlements
     except Exception as e:
         db.session.rollback()
