@@ -8,7 +8,8 @@ from flask_mail import Mail
 from dotenv import load_dotenv
 from apscheduler.schedulers.background import BackgroundScheduler
 import os
-
+import atexit
+from datetime import datetime
 
 # Utwórz instancje rozszerzeń poza funkcją, aby były dostępne globalnie
 db = SQLAlchemy()
@@ -65,6 +66,7 @@ def create_app():
     from .routes.receipt import receipt_bp
     from .routes import settlements
     from app.routes.notifications import notifications_bp
+    
     # Rejestrowanie blueprints w aplikacji
     app.register_blueprint(auth.bp)
     app.register_blueprint(main_bp)
@@ -79,9 +81,9 @@ def create_app():
     from app.services.notifications_services import wyslij_przypomnienia_dluznikom
     scheduler.add_job(
         func=wyslij_przypomnienia_dluznikom,
-        trigger='cron',
-        hour=9,
-        minute=0,
+        trigger='interval',
+        days=7,
+        next_run_time=datetime.utcnow(),
         id='przypomnienia_dluznikom'
     )
     scheduler.start()
@@ -96,5 +98,7 @@ def create_app():
     with app.app_context():
         db.create_all()
         pass
+
+    atexit.register(lambda: scheduler.shutdown(wait=False))
 
     return app
