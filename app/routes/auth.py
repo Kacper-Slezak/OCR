@@ -1,4 +1,3 @@
-import bcrypt  # Możesz usunąć, jeśli używasz werkzeug.security
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 from flask_mail import Message
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -8,6 +7,7 @@ from app import mail, db
 from app.models import User
 from app.forms import LoginForm, RegistrationForm, PasswordResetRequestForm, PasswordResetForm
 from app.services.token_utils import generate_confirmation_token, confirm_token
+from app.services.notifications_services import wyslij_email
 
 # Przywrócenie poprzedniej konwencji: nazwa blueprintu jako bp
 bp = Blueprint(
@@ -33,7 +33,10 @@ def login():
         user = User.query.filter_by(username=identifier).first() or \
                User.query.filter_by(email=identifier).first()
 
-        if user and check_password_hash(user.password_hash, password):
+        if user and user.check_password(password):
+            if not user.email_confirmed:
+                flash('Musisz potwierdzić swój e-mail przed zalogowaniem.', 'warning')
+                return redirect(url_for('auth.login'))
             login_user(user, remember=remember)
             flash('Zalogowano pomyślnie!', 'success')
             next_page = request.args.get('next')
@@ -48,20 +51,48 @@ def login():
 def register():
     form = RegistrationForm()
     if form.validate_on_submit():
-        username = form.username.data
-        email = form.email.data
-        password = form.password.data
-
-        hashed_password = generate_password_hash(password)
-        new_user = User(username=username, email=email, password_hash=hashed_password)
-
+        new_user = User(
+            username=form.username.data,
+            email=form.email.data
+        )
+        new_user.set_password(form.password.data)
         db.session.add(new_user)
         db.session.commit()
 
-        flash('Rejestracja zakończona sukcesem! Możesz się teraz zalogować.', 'success')
+        token = generate_confirmation_token(new_user.email)
+        confirm_url = url_for('auth.confirm_email', token=token, _external=True)
+        temat = "Potwierdź swój adres e-mail"
+        tresc = (
+            f"Cześć {new_user.username},\n\n"
+            f"Aby ukończyć rejestrację, kliknij w link:\n{confirm_url}\n\n"
+            "Jeśli to nie Ty, zignoruj tę wiadomość."
+        )
+        wyslij_email(new_user.email, temat, tresc)
+
+        flash('Rejestracja prawie zakończona! Sprawdź skrzynkę pocztową i potwierdź e-mail.', 'info')
         return redirect(url_for('auth.login'))
 
     return render_template('auth/register.html', form=form)
+
+# -- Podtwierdzenie poczty --
+@bp.route('/confirm/<token>')
+def confirm_email(token):
+    try:
+        email = confirm_token(token)
+    except:
+        email = None
+
+    if not email:
+        flash('Link potwierdzający jest nieprawidłowy lub wygasł.', 'danger')
+        return redirect(url_for('auth.login'))
+
+    user = User.query.filter_by(email=email).first_or_404()
+    if user.email_confirmed:
+        flash('E-mail już potwierdzony. Zaloguj się.', 'info')
+    else:
+        user.confirm()
+        flash('Dziękujemy! Twój e-mail został potwierdzony.', 'success')
+    return redirect(url_for('auth.login'))
 
 # -- Wylogowanie --
 @bp.route('/logout')

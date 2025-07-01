@@ -1,4 +1,6 @@
 # app/routes/settlements.py
+from datetime import datetime
+from flask import Blueprint, render_template, redirect, url_for, flash, make_response
 from decimal import Decimal
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
@@ -7,6 +9,11 @@ from app.models import ShoppingList, Settlement, User, Friend, Product
 from app.services.settlements_services import calculate_settlements, check_and_update_list_settlement_status
 from datetime import datetime, timedelta
 from collections import defaultdict
+from decimal import Decimal
+from io import StringIO
+import csv
+
+
 from sqlalchemy import func, or_
 
 bp = Blueprint('settlements', __name__, url_prefix='/settlements')
@@ -359,4 +366,39 @@ def settlement_history():
     ).order_by(Settlement.created_at.desc()).all()
 
     return render_template('settlements/history.html', all_settlements=all_settlements)
+
+# Export transakcji
+@bp.route('/transakcje.csv')
+def eksportuj_transakcje_csv():
+    """
+    Generuje plik CSV ze wszystkimi rekordami Settlement
+    """
+    # Nagłówki kolumn
+    naglowki = ['ID', 'ID listy', 'ID dłużnika', 'ID wierzyciela',
+                'Kwota', 'Utworzono', 'Rozliczono', 'Status']
+
+    # Przygotowanie bufora CSV
+    bufor = StringIO()
+    writer = csv.writer(bufor, delimiter=';')
+    writer.writerow(naglowki)
+
+    # Pobieramy wszystkie transakcje
+    transakcje = Settlement.query.all()
+    for t in transakcje:
+        writer.writerow([
+            t.id,
+            t.shopping_list_id,
+            t.debtor_id,
+            t.creditor_id,
+            f"{t.amount:.2f}",
+            t.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            t.settled_at.strftime('%Y-%m-%d %H:%M:%S') if t.settled_at else '',
+            'tak' if t.is_settled else 'nie'
+        ])
+
+    # Tworzymy odpowiedź
+    output = make_response(bufor.getvalue())
+    output.headers['Content-Type'] = 'text/csv; charset=utf-8'
+    output.headers['Content-Disposition'] = 'attachment; filename=transakcje.csv'
+    return output
 

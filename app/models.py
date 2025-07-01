@@ -59,6 +59,16 @@ class User(db.Model, UserMixin):
     # Relacja do znajomych stworzonych przez użytkownika
     friends_owned = db.relationship('Friend', backref='owner', lazy='dynamic', foreign_keys='Friend.user_id')
 
+    email_confirmed   = db.Column(db.Boolean, default=False, nullable=False)
+    email_confirmed_on = db.Column(db.DateTime, nullable=True)
+    
+    def confirm(self):
+        """Odznacza to, czy poczta jest podtwierdzona"""
+        self.email_confirmed = True
+        self.email_confirmed_on = datetime.utcnow()
+        db.session.add(self)
+        db.session.commit()
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
