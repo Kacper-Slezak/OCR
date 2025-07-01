@@ -10,8 +10,8 @@
     <div class="row mb-4">
       <div class="col-md-6 offset-md-3">
         <div class="stat-card" id="mainBalanceCard">
-          <h3><i class="fas fa-balance-scale me-2"></i>Twoje Saldo</h3>
-          <h1 id="mainBalance">Ładwanie...</h1>
+          <h3><i class="fas fa-balance-scale me-2"></i>Twoje Saldo Netto</h3>
+          <h1 id="mainBalance">Ładowanie...</h1>
           <p id="balanceDescription"></p>
         </div>
       </div>
@@ -59,12 +59,16 @@
 
     <hr class="my-5">
     <div class="section-title">
-      <i class="fas fa-users me-2"></i>Wszystkie Rozliczenia
+      <i class="fas fa-exchange-alt me-2"></i>Nierozliczone Transakcje
     </div>
 
-    <div id="allBalances">
-      <p class="text-center text-muted">Ładowanie rozliczeń...</p>
+    <div id="unsettledTransactionsList" class="bg-white p-4 rounded-lg shadow">
+      <p class="text-center text-muted">Ładowanie transakcji...</p>
     </div>
+
+    <p class="text-center mt-8">
+        <a href="{{ url_for('settlements.settlement_history') }}" class="btn bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition duration-150">Zobacz historię wszystkich rozliczeń (również opłaconych)</a>
+    </p>
   </div>
 </div>
 
@@ -73,6 +77,8 @@
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+  console.log('Script started: dashboard_with_charts.html'); // Debug log
+
   // Global variables to store fetched data
   let settlementStats = {};
   let settlementActivity = {};
@@ -80,6 +86,7 @@
 
   // Function to calculate and display main balance
   function calculateMainBalance() {
+    console.log('calculateMainBalance called'); // Debug log
     const mainBalanceEl = document.getElementById("mainBalance");
     const mainBalanceCard = document.getElementById("mainBalanceCard");
     const descriptionEl = document.getElementById("balanceDescription");
@@ -115,6 +122,7 @@
 
   // Create Balance Trend Chart
   function createBalanceTrendChart() {
+    console.log('createBalanceTrendChart called'); // Debug log
     const ctx = document.getElementById("balanceTrendChart").getContext("2d");
     const noDataEl = document.getElementById("balanceTrendChartNoData");
 
@@ -122,17 +130,15 @@
 
     if (!trendData || trendData.length === 0) {
       noDataEl.classList.remove("d-none");
-      // Destroy existing chart if any, to prevent rendering errors
       if (window.balanceTrendChartInstance) {
           window.balanceTrendChartInstance.destroy();
-          window.balanceTrendChartInstance = null; // Clear reference
+          window.balanceTrendChartInstance = null;
       }
       return;
     } else {
       noDataEl.classList.add("d-none");
     }
 
-    // Destroy previous chart instance if it exists to prevent overlap
     if (window.balanceTrendChartInstance) {
         window.balanceTrendChartInstance.destroy();
     }
@@ -199,6 +205,7 @@
 
   // Create Activity Chart (number of settlements per month)
   function createActivityChart() {
+    console.log('createActivityChart called'); // Debug log
     const ctx = document.getElementById("activityChart").getContext("2d");
     const noDataEl = document.getElementById("activityChartNoData");
 
@@ -264,6 +271,7 @@
 
   // Create Spending Per List Chart
   function createSpendingPerListChart() {
+    console.log('createSpendingPerListChart called'); // Debug log
     const ctx = document.getElementById("spendingPerListChart").getContext("2d");
     const noDataEl = document.getElementById("spendingPerListChartNoData");
 
@@ -341,275 +349,120 @@
   }
 
 
-  // Display all balances (both positive and negative)
-  function displayAllBalances() {
-    const container = document.getElementById("allBalances");
+  // Display all unsettled transactions
+  function displayUnsettledTransactions() {
+    console.log('displayUnsettledTransactions called'); // Debug log
+    const transactionsEl = document.getElementById("unsettledTransactionsList");
+    transactionsEl.innerHTML = ''; // Clear loading message
 
-    if (!settlementStats.balances || settlementStats.balances.length === 0) {
-      container.innerHTML =
-        '<p class="text-center text-muted">Brak aktywnych rozliczeń.</p>';
+    const transactions = settlementStats.unsettled_transactions;
+
+    if (!transactions || transactions.length === 0) {
+      transactionsEl.innerHTML = '<p class="text-center text-muted">Brak nierozliczonych transakcji.</p>';
       return;
     }
 
-    // Sort balances - positive first (people who owe you), then negative (people you owe)
-    const sortedBalances = settlementStats.balances.sort((a, b) => {
-      // Sort by type: 'owes_you' first, then 'you_owe'
-      if (a.type === "owes_you" && b.type === "you_owe") return -1;
-      if (a.type === "you_owe" && b.type === "owes_you") return 1;
-      // Then sort by absolute amount within the same type (descending)
-      return Math.abs(b.amount) - Math.abs(a.amount);
+    const ul = document.createElement('ul');
+    ul.classList.add('list-group', 'list-group-flush');
+
+    transactions.forEach(transaction => {
+      const li = document.createElement('li');
+      li.classList.add('list-group-item', 'd-flex', 'justify-content-between', 'align-items-center');
+
+      let description = '';
+      let amountClass = '';
+
+      if (transaction.type === 'owes_you') {
+        description = `<strong>${transaction.debtor_name}</strong> jest winien <strong>${transaction.creditor_name}</strong>`;
+        amountClass = 'text-success';
+      } else if (transaction.type === 'you_owe') {
+        description = `<strong>${transaction.debtor_name}</strong> jest winien <strong>${transaction.creditor_name}</strong>`;
+        amountClass = 'text-danger';
+      } else {
+        description = `<strong>${transaction.debtor_name}</strong> jest winien <strong>${transaction.creditor_name}</strong>`;
+        amountClass = 'text-info';
+      }
+
+      li.innerHTML = `
+        <div>
+          ${description}: <span class="badge ${amountClass}">${transaction.amount.toFixed(2)} zł</span>
+          <br><small class="text-muted">Za listę: ${transaction.shopping_list_name}</small>
+        </div>
+        <form action="/settlements/settle/${transaction.id}" method="POST" class="inline-block ms-2">
+            <button type="submit" class="btn btn-sm btn-success">Oznacz jako opłacone</button>
+        </form>
+      `;
+      ul.appendChild(li);
     });
-
-    container.innerHTML = sortedBalances
-        .map((balance) => {
-            let amountClass, itemClass, icon, text;
-
-            if (balance.type === "owes_you") {
-              amountClass = "amount-positive";
-              itemClass = "positive";
-              icon = "fa-arrow-up";
-              text = "Jest Ci winien";
-            } else {
-              amountClass = "amount-negative";
-              itemClass = "negative";
-              icon = "fa-arrow-down";
-              text = "Jesteś winny";
-            }
-
-            return `
-            <div class="balance-item ${itemClass}">
-                <div>
-                    <h5><i class="fas ${icon} me-2"></i>${balance.entity_name}</h5>
-                    <small class="text-muted">${text}</small>
-                </div>
-                <div class="text-end">
-                    <div class="${amountClass}">
-                        ${Math.abs(balance.amount).toFixed(2)} zł
-                    </div>
-                </div>
-            </div>
-        `;
-        })
-        .join("");
+    transactionsEl.appendChild(ul);
   }
 
-  // Fetch data and initialize on page load
-  document.addEventListener("DOMContentLoaded", async function () {
+
+  // Fetch all data and render charts
+  async function fetchDataAndRenderCharts() {
+    console.log('fetchDataAndRenderCharts started'); // Debug log
     try {
-      // Fetch settlement stats (includes net balances and spending per list)
-      const statsResponse = await fetch("/settlements/api/stats");
+      const [statsResponse, activityResponse, trendsResponse] = await Promise.all([
+        fetch('/settlements/api/stats'),
+        fetch('/settlements/api/activity'),
+        fetch('/settlements/api/settlement-trends')
+      ]);
+
+      // Check if responses are OK before parsing JSON
       if (!statsResponse.ok) {
-        throw new Error(
-          `HTTP error! status: ${statsResponse.status} from /settlements/api/stats`
-        );
+        console.error('API Stats fetch failed:', statsResponse.status, statsResponse.statusText);
+        throw new Error('Failed to fetch settlement stats');
       }
-      settlementStats = await statsResponse.json();
-
-      // Fetch settlement activity
-      const activityResponse = await fetch("/settlements/api/activity");
       if (!activityResponse.ok) {
-        throw new Error(
-          `HTTP error! status: ${activityResponse.status} from /settlements/api/activity`
-        );
+        console.error('API Activity fetch failed:', activityResponse.status, activityResponse.statusText);
+        throw new Error('Failed to fetch settlement activity');
       }
-      settlementActivity = await activityResponse.json();
-
-      // Fetch settlement trends
-      const trendsResponse = await fetch("/settlements/api/settlement-trends");
       if (!trendsResponse.ok) {
-        throw new Error(
-          `HTTP error! status: ${trendsResponse.status} from /settlements/api/settlement-trends`
-        );
+        console.error('API Trends fetch failed:', trendsResponse.status, trendsResponse.statusText);
+        throw new Error('Failed to fetch settlement trends');
       }
+
+      settlementStats = await statsResponse.json();
+      settlementActivity = await activityResponse.json();
       settlementTrends = await trendsResponse.json();
 
+      console.log('Fetched Stats:', settlementStats); // Debug log
+      console.log('Fetched Activity:', settlementActivity); // Debug log
+      console.log('Fetched Trends:', settlementTrends); // Debug log
 
-      // Initialize dashboard elements with fetched data
+      if (settlementStats.error) {
+        console.error("Error from API Stats:", settlementStats.error);
+        document.getElementById("mainBalance").textContent = "Błąd";
+        document.getElementById("balanceDescription").textContent = settlementStats.error;
+      }
+      if (settlementActivity.error) {
+        console.error("Error from API Activity:", settlementActivity.error);
+      }
+      if (settlementTrends.error) {
+        console.error("Error from API Trends:", settlementTrends.error);
+      }
+
       calculateMainBalance();
       createBalanceTrendChart();
       createActivityChart();
       createSpendingPerListChart();
-      displayAllBalances();
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      // Update UI to show error states
-      document.getElementById("mainBalance").textContent = "Błąd";
-      document.getElementById("balanceDescription").textContent =
-        "Nie udało się załadować danych.";
-      document.getElementById("allBalances").innerHTML =
-        '<p class="text-center text-danger">Nie udało się załadować rozliczeń.</p>';
+      displayUnsettledTransactions();
 
-      // Show "no data" messages for charts
+    } catch (error) {
+      console.error("Failed to fetch settlement data or render charts:", error);
+      document.getElementById("mainBalance").textContent = "Błąd ładowania";
+      document.getElementById("balanceDescription").textContent = "Sprawdź połączenie lub spróbuj ponownie.";
       document.getElementById("balanceTrendChartNoData").classList.remove("d-none");
       document.getElementById("activityChartNoData").classList.remove("d-none");
       document.getElementById("spendingPerListChartNoData").classList.remove("d-none");
-
-      // Additionally, clear chart canvases to remove any partial rendering if an error occurred
-      // and prevent issues if data eventually loads but is incomplete.
-      // This is a more robust way to handle chart errors.
-      const chartCanvases = [
-        document.getElementById("balanceTrendChart"),
-        document.getElementById("activityChart"),
-        document.getElementById("spendingPerListChart")
-      ];
-
-      chartCanvases.forEach(canvas => {
-          if (canvas) {
-              const ctx = canvas.getContext('2d');
-              if (ctx) {
-                  ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear drawing
-              }
-              // Destroy Chart.js instance if it exists
-              const chartInstance = Chart.getChart(canvas);
-              if (chartInstance) {
-                  chartInstance.destroy();
-              }
-          }
-      });
+      document.getElementById("unsettledTransactionsList").innerHTML = '<p class="text-center text-danger">Wystąpił błąd podczas ładowania danych.</p>';
     }
+  }
+
+  // Initial data fetch and chart rendering
+  document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOMContentLoaded event fired'); // Debug log
+    fetchDataAndRenderCharts();
   });
 </script>
-<style>
-  /* Dodaj te style do swojego pliku CSS (np. base.css lub stylów w head) */
-  .dashboard-container {
-    padding: 2rem;
-    background-color: #f8f9fa;
-    border-radius: 10px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  }
-
-  .stat-card {
-    background-color: #fff;
-    padding: 25px;
-    border-radius: 10px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    text-align: center;
-    transition: all 0.3s ease;
-    border-left: 5px solid #ccc;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    min-height: 150px;
-  }
-
-  .stat-card h3 {
-    color: #555;
-    font-size: 1.3rem;
-    margin-bottom: 15px;
-  }
-
-  .stat-card h1 {
-    font-size: 3rem;
-    margin-bottom: 10px;
-    font-weight: bold;
-  }
-
-  .stat-card.positive {
-    border-left-color: #28a745;
-  }
-
-  .stat-card.positive h1 {
-    color: #28a745;
-  }
-
-  .stat-card.negative {
-    border-left-color: #dc3545;
-  }
-
-  .stat-card.negative h1 {
-    color: #dc3545;
-  }
-
-  .chart-container {
-    background-color: #fff;
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    margin-bottom: 20px;
-    height: 350px; /* Fixed height for consistent layout */
-    display: flex;
-    flex-direction: column;
-    position: relative; /* For no-data overlay */
-  }
-
-  .chart-title {
-    font-size: 1.2rem;
-    font-weight: bold;
-    color: #444;
-    margin-bottom: 15px;
-    text-align: center;
-  }
-
-  .section-title {
-    font-size: 1.8rem;
-    font-weight: bold;
-    color: #333;
-    margin-bottom: 30px;
-    text-align: center;
-    padding-bottom: 10px;
-    border-bottom: 2px solid #eee;
-  }
-
-  .balance-item {
-    background-color: #fff;
-    border: 1px solid #eee;
-    border-radius: 8px;
-    padding: 15px 20px;
-    margin-bottom: 12px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
-    transition: transform 0.2s ease-in-out;
-  }
-
-  .balance-item:hover {
-    transform: translateY(-3px);
-  }
-
-  .balance-item h5 {
-    margin: 0;
-    font-size: 1.1rem;
-    color: #333;
-  }
-
-  .balance-item .amount-positive {
-    color: #28a745;
-    font-weight: bold;
-    font-size: 1.2rem;
-  }
-
-  .balance-item .amount-negative {
-    color: #dc3545;
-    font-weight: bold;
-    font-size: 1.2rem;
-  }
-
-  .balance-item.positive {
-    border-left: 5px solid #28a745;
-  }
-
-  .balance-item.negative {
-    border-left: 5px solid #dc3545;
-  }
-
-  .no-data-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(255, 255, 255, 0.9);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 10px;
-    z-index: 10; /* Ensure it's above the canvas */
-    text-align: center;
-  }
-  .no-data-overlay p {
-      font-size: 1.1rem;
-  }
-</style>
 {% endblock %}

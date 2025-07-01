@@ -7,7 +7,7 @@ from datetime import datetime
 from sqlalchemy.exc import IntegrityError
 
 # POPRAWKA: Upewnij się, że importujesz obie funkcje z settlement_service
-from app.services.settlements_services import calculate_settlements, _check_and_update_list_settlement_status
+from app.services.settlements_services import calculate_settlements, check_and_update_list_settlement_status
 
 bp = Blueprint('main', __name__)
 

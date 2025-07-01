@@ -65,14 +65,14 @@
                             </button>
                         </div>
                     </form>
-                    
+
                     {% if shopping_list.receipts.all() %}
                         <h3 class="h5 mt-4 mb-3">Powiązane paragony:</h3>
                         <ul class="list-unstyled">
                             {% for r in shopping_list.receipts %}
                                 <li class="mb-2 p-2 border rounded">
-                                    <strong>Paragon #{{ r.id }}</strong> 
-                                    <span class="badge 
+                                    <strong>Paragon #{{ r.id }}</strong>
+                                    <span class="badge
                                         {% if r.status == 'Processed' %}bg-success
                                         {% elif r.status == 'ERROR' %}bg-danger
                                         {% elif r.status == 'processing' %}bg-warning
@@ -228,7 +228,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }).join('');
 
         div.innerHTML = `
-            <input type="hidden" name="products[${productCounter}][db_id]" value="${product.db_id || ''}" /> {# Dodaj to pole #}
+            <input type="hidden" name="products[${productCounter}][db_id]" value="${product.db_id || ''}" />
             <input type="text" name="products[${productCounter}][name]" value="${product.name || ''}" placeholder="Nazwa produktu" required
                    class="form-control" style="flex: 2; min-width: 150px;" />
             <input type="number" name="products[${productCounter}][price]" value="${displayPrice || ''}" placeholder="Cena" step="0.01"
@@ -259,6 +259,7 @@ document.addEventListener('DOMContentLoaded', function() {
             item.querySelectorAll('input, select').forEach(input => {
                 const nameAttr = input.name;
                 if (nameAttr) {
+                    // Fixed template literal syntax
                     input.name = nameAttr.replace(/products\[\d+\]/, `products[${index}]`);
                 }
             });
