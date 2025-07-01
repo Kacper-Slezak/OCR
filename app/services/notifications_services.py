@@ -43,15 +43,15 @@ def wyslij_powiadomienia(temat_tpl: str, tresc_tpl: str, kontekst_fn) -> None:
 def wyslij_przypomnienia_dluznikom() -> None:
     """
     Codzienna funkcja APScheduler, wysyła przypomnienia dłużnikom
-    za wygasłe czeki.
+    za wygasłe czeki — jedno mail na użytkownika z listą wszystkich długów.
     """
     delay_days = int(os.getenv('DEBT_REMINDER_DELAY_DAYS', 3))
     cutoff = datetime.utcnow() - timedelta(days=delay_days)
 
-    debts = (
+    rows = (
         db.session.query(Settlement, Receipt, User)
         .join(Receipt, Settlement.receipt_id == Receipt.id)
-        .join(User, Settlement.debtor_id == User.id)
+        .join(User, Settlement.debtor_user_id == User.id)
         .filter(
             Settlement.is_settled == False,
             Receipt.upload_date < cutoff
@@ -59,17 +59,46 @@ def wyslij_przypomnienia_dluznikom() -> None:
         .all()
     )
 
-    temat_tpl = "Przypomnienie: nieuregulowany dług za paragon {{ receipt.id }}"
-    tresc_tpl = (
-        "Cześć {{ user.username }},\n\n"
-        "Przypominamy, że paragon nr {{ receipt.id }} z dnia {{ receipt.upload_date }} "
-        "ciągle nie został uregulowany kwotą {{ settlement.amount }}.\n\n"
-        "Prosimy o jak najszybszą wpłatę.\n\n"
-        "Pozdrawiamy,\nZespół OCR"
-    )
+    debts_by_user = {}
+    for settlement, receipt, user in rows:
+        debts_by_user.setdefault(user.id, {
+            'user': user,
+            'items': [],
+            'total': 0
+        })
+        entry = debts_by_user[user.id]
+        entry['items'].append({
+            'receipt_id':    receipt.id,
+            'upload_date':   receipt.upload_date.strftime('%Y-%m-%d'),
+            'amount':        f"{settlement.amount:.2f}"
+        })
+        entry['total'] += float(settlement.amount)
 
-    for settlement, receipt, user in debts:
-        kontekst = {'user': user, 'receipt': receipt, 'settlement': settlement}
-        temat = Template(temat_tpl).render(**kontekst)
-        tresc = Template(tresc_tpl).render(**kontekst)
+    tresc_tpl = Template("""
+Cześć {{ user.username }},
+
+Przypominamy, że masz nieuregulowane długi:
+
+{% for d in items -%}
+- Paragon nr {{ d.receipt_id }} z dnia {{ d.upload_date }}: {{ d.amount }} PLN
+{% endfor %}
+
+Razem do zapłaty: {{ total | round(2) }} PLN
+
+Prosimy o jak najszybszą wpłatę.
+
+Pozdrawiamy,
+Zespół OCR
+""".lstrip())
+
+    temat_tpl = Template("Przypomnienie o nieuregulowanych długach — {{ total|round(2) }} PLN")
+
+    for data in debts_by_user.values():
+        user = data['user']
+        temat = temat_tpl.render(total=data['total'])
+        tresc = tresc_tpl.render(
+            user=user,
+            items=data['items'],
+            total=data['total']
+        )
         wyslij_email(user.email, temat, tresc)
