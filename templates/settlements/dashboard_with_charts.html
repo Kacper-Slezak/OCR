@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+{% extends "base.html" %}
+{% block content %}
+<div class="container-fluid">
+  <div class="dashboard-container">
+    <h1 class="text-center mb-4" style="color: #333; font-weight: bold">
+      <i class="fas fa-chart-line me-3"></i>Dashboard Rozliczeń
+    </h1>
+
+    <div class="row mb-4">
+      <div class="col-md-6 offset-md-3">
+        <div class="stat-card" id="mainBalanceCard">
+          <h3><i class="fas fa-balance-scale me-2"></i>Twoje Saldo Netto</h3>
+          <h1 id="mainBalance">Ładowanie...</h1>
+          <p id="balanceDescription"></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-md-6">
+        <div class="chart-container" style="position: relative; height: 350px;">
+          <div class="chart-title">
+            <i class="fas fa-chart-line me-2"></i>Trend Salda w Czasie
+          </div>
+          <canvas id="balanceTrendChart"></canvas>
+          <div id="balanceTrendChartNoData" class="no-data-overlay d-none">
+            <p class="text-center text-muted">Brak danych historycznych do wykresu trendu.</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="chart-container" style="position: relative; height: 350px;">
+          <div class="chart-title">
+            <i class="fas fa-chart-area me-2"></i>Aktywność Rozliczeń
+          </div>
+          <canvas id="activityChart"></canvas>
+          <div id="activityChartNoData" class="no-data-overlay d-none">
+            <p class="text-center text-muted">Brak danych o aktywności rozliczeń.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# WYKRES: Wydatki na Listy Zakupów #}
+    <div class="row mt-4">
+        <div class="col-md-6 offset-md-3">
+            <div class="chart-container" style="position: relative; height: 350px;">
+                <div class="chart-title">
+                    <i class="fas fa-shopping-basket me-2"></i>Wydatki na Listy Zakupów
+                </div>
+                <canvas id="spendingPerListChart"></canvas>
+                <div id="spendingPerListChartNoData" class="no-data-overlay d-none">
+                  <p class="text-center text-muted">Brak danych o wydatkach na listy zakupów.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <hr class="my-5">
+    <div class="section-title">
+      <i class="fas fa-exchange-alt me-2"></i>Nierozliczone Transakcje
+    </div>
+
+    <div id="unsettledTransactionsList" class="bg-white p-4 rounded-lg shadow">
+      <p class="text-center text-muted">Ładowanie transakcji...</p>
+    </div>
+
+    <p class="text-center mt-8">
+        <a href="{{ url_for('settlements.settlement_history') }}" class="btn bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition duration-150">Zobacz historię wszystkich rozliczeń (również opłaconych)</a>
+    </p>
+      <a href="{{ url_for('settlements.eksportuj_transakcje_csv') }}" class="btn btn-primary">
+    Pobierz transakcje w CSV
+</a>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  console.log('Script started: dashboard_with_charts.html'); // Debug log
+
+  // Global variables to store fetched data
+  let settlementStats = {};
+  let settlementActivity = {};
+  let settlementTrends = {};
+
+  // Function to calculate and display main balance
+  function calculateMainBalance() {
+    console.log('calculateMainBalance called'); // Debug log
+    const mainBalanceEl = document.getElementById("mainBalance");
+    const mainBalanceCard = document.getElementById("mainBalanceCard");
+    const descriptionEl = document.getElementById("balanceDescription");
+
+    const total = settlementStats.total_balance;
+
+    if (typeof total === 'undefined' || total === null) {
+      mainBalanceEl.textContent = "Brak danych";
+      descriptionEl.textContent = "Nie udało się pobrać salda.";
+      mainBalanceCard.classList.remove("positive", "negative");
+      return;
+    }
+
+    mainBalanceEl.textContent = total.toFixed(2) + " zł";
+
+    if (total > 0) {
+      mainBalanceCard.classList.add("positive");
+      mainBalanceCard.classList.remove("negative");
+      mainBalanceEl.textContent = "+" + total.toFixed(2) + " zł";
+      descriptionEl.textContent =
+        "Łącznie są Ci winni " + total.toFixed(2) + " zł";
+    } else if (total < 0) {
+      mainBalanceCard.classList.add("negative");
+      mainBalanceCard.classList.remove("positive");
+      mainBalanceEl.textContent = total.toFixed(2) + " zł";
+      descriptionEl.textContent =
+        "Łącznie jesteś winny " + Math.abs(total).toFixed(2) + " zł";
+    } else {
+      mainBalanceCard.classList.remove("positive", "negative");
+      descriptionEl.textContent = "Wszystkie rozliczenia są wyrównane";
+    }
+  }
+
+  // Create Balance Trend Chart
+  function createBalanceTrendChart() {
+    console.log('createBalanceTrendChart called'); // Debug log
+    const ctx = document.getElementById("balanceTrendChart").getContext("2d");
+    const noDataEl = document.getElementById("balanceTrendChartNoData");
+
+    const trendData = settlementTrends.trends;
+
+    if (!trendData || trendData.length === 0) {
+      noDataEl.classList.remove("d-none");
+      if (window.balanceTrendChartInstance) {
+          window.balanceTrendChartInstance.destroy();
+          window.balanceTrendChartInstance = null;
+      }
+      return;
+    } else {
+      noDataEl.classList.add("d-none");
+    }
+
+    if (window.balanceTrendChartInstance) {
+        window.balanceTrendChartInstance.destroy();
+    }
+
+    window.balanceTrendChartInstance = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: trendData.map(item => item.week),
+        datasets: [{
+          label: "Saldo (zł)",
+          data: trendData.map(item => item.total_amount),
+          borderColor: "rgba(0, 210, 211, 1)",
+          backgroundColor: "rgba(0, 210, 211, 0.1)",
+          borderWidth: 3,
+          fill: true,
+          tension: 0.4,
+          pointBackgroundColor: "rgba(0, 210, 211, 1)",
+          pointBorderColor: "#fff",
+          pointBorderWidth: 2,
+          pointRadius: 6,
+          pointHoverRadius: 8
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            grid: {
+              color: "rgba(0,0,0,0.1)"
+            },
+            ticks: {
+              callback: function (value) {
+                return value.toFixed(2) + " zł";
+              },
+            },
+          },
+          x: {
+            grid: {
+              color: "rgba(0,0,0,0.1)"
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            display: false,
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                return 'Saldo: ' + context.parsed.y.toFixed(2) + ' zł';
+              }
+            }
+          }
+        },
+        elements: {
+          point: {
+            hoverBackgroundColor: "rgba(0, 210, 211, 1)"
+          }
+        }
+      }
+    });
+  }
+
+  // Create Activity Chart (number of settlements per month)
+  function createActivityChart() {
+    console.log('createActivityChart called'); // Debug log
+    const ctx = document.getElementById("activityChart").getContext("2d");
+    const noDataEl = document.getElementById("activityChartNoData");
+
+    const activityData = settlementActivity.monthly_activity;
+
+    if (!activityData || activityData.length === 0) {
+      noDataEl.classList.remove("d-none");
+      if (window.activityChartInstance) {
+          window.activityChartInstance.destroy();
+          window.activityChartInstance = null;
+      }
+      return;
+    } else {
+      noDataEl.classList.add("d-none");
+    }
+
+    if (window.activityChartInstance) {
+        window.activityChartInstance.destroy();
+    }
+
+    window.activityChartInstance = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: activityData.map(item => item.month),
+        datasets: [{
+          label: "Liczba rozliczeń",
+          data: activityData.map(item => item.settlements),
+          backgroundColor: "rgba(102, 126, 234, 0.8)",
+          borderColor: "rgba(102, 126, 234, 1)",
+          borderWidth: 2,
+          borderRadius: 8,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              stepSize: 1,
+              callback: function (value) {
+                return Math.floor(value);
+              },
+            },
+          },
+        },
+        plugins: {
+          legend: {
+            display: false,
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                return 'Rozliczeń: ' + context.parsed.y;
+              }
+            }
+          }
+        },
+      },
+    });
+  }
+
+  // Create Spending Per List Chart
+  function createSpendingPerListChart() {
+    console.log('createSpendingPerListChart called'); // Debug log
+    const ctx = document.getElementById("spendingPerListChart").getContext("2d");
+    const noDataEl = document.getElementById("spendingPerListChartNoData");
+
+    const spendingPerList = settlementStats.spending_per_list;
+
+    if (!spendingPerList || Object.keys(spendingPerList).length === 0) {
+      noDataEl.classList.remove("d-none");
+      if (window.spendingPerListChartInstance) {
+          window.spendingPerListChartInstance.destroy();
+          window.spendingPerListChartInstance = null;
+      }
+      return;
+    } else {
+      noDataEl.classList.add("d-none");
+    }
+
+    if (window.spendingPerListChartInstance) {
+        window.spendingPerListChartInstance.destroy();
+    }
+
+    const spendingLabels = Object.keys(spendingPerList);
+    const spendingData = Object.values(spendingPerList);
+
+    window.spendingPerListChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: spendingLabels,
+            datasets: [{
+                label: 'Wydatki [zł]',
+                data: spendingData,
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.6)',
+                    'rgba(54, 162, 235, 0.6)',
+                    'rgba(255, 206, 86, 0.6)',
+                    'rgba(75, 192, 192, 0.6)',
+                    'rgba(153, 102, 255, 0.6)',
+                    'rgba(255, 159, 64, 0.6)',
+                    'rgba(199, 199, 199, 0.6)',
+                    'rgba(83, 102, 255, 0.6)'
+                ],
+                borderColor: [
+                    'rgba(255, 99, 132, 1)',
+                    'rgba(54, 162, 235, 1)',
+                    'rgba(255, 206, 86, 1)',
+                    'rgba(75, 192, 192, 1)',
+                    'rgba(153, 102, 255, 1)',
+                    'rgba(255, 159, 64, 1)',
+                    'rgba(199, 199, 199, 1)',
+                    'rgba(83, 102, 255, 1)'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.label || '';
+                            if (label) {
+                                label += ': ';
+                            }
+                            if (context.parsed !== null) {
+                                label += new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' }).format(context.parsed);
+                            }
+                            return label;
+                        }
+                    }
+                }
+            }
+        }
+    });
+  }
+
+
+  // Display all unsettled transactions
+  function displayUnsettledTransactions() {
+    console.log('displayUnsettledTransactions called'); // Debug log
+    const transactionsEl = document.getElementById("unsettledTransactionsList");
+    transactionsEl.innerHTML = ''; // Clear loading message
+
+    const transactions = settlementStats.unsettled_transactions;
+
+    if (!transactions || transactions.length === 0) {
+      transactionsEl.innerHTML = '<p class="text-center text-muted">Brak nierozliczonych transakcji.</p>';
+      return;
+    }
+
+    const ul = document.createElement('ul');
+    ul.classList.add('list-group', 'list-group-flush');
+
+    transactions.forEach(transaction => {
+      const li = document.createElement('li');
+      li.classList.add('list-group-item', 'd-flex', 'justify-content-between', 'align-items-center');
+
+      let description = '';
+      let amountClass = '';
+
+      if (transaction.type === 'owes_you') {
+        description = `<strong>${transaction.debtor_name}</strong> jest winien <strong>${transaction.creditor_name}</strong>`;
+        amountClass = 'text-success';
+      } else if (transaction.type === 'you_owe') {
+        description = `<strong>${transaction.debtor_name}</strong> jest winien <strong>${transaction.creditor_name}</strong>`;
+        amountClass = 'text-danger';
+      } else {
+        description = `<strong>${transaction.debtor_name}</strong> jest winien <strong>${transaction.creditor_name}</strong>`;
+        amountClass = 'text-info';
+      }
+
+      li.innerHTML = `
+        <div>
+          ${description}: <span class="badge ${amountClass}">${transaction.amount.toFixed(2)} zł</span>
+          <br><small class="text-muted">Za listę: ${transaction.shopping_list_name}</small>
+        </div>
+        <form action="/settlements/settle/${transaction.id}" method="POST" class="inline-block ms-2">
+            <button type="submit" class="btn btn-sm btn-success">Oznacz jako opłacone</button>
+        </form>
+      `;
+      ul.appendChild(li);
+    });
+    transactionsEl.appendChild(ul);
+  }
+
+
+  // Fetch all data and render charts
+  async function fetchDataAndRenderCharts() {
+    console.log('fetchDataAndRenderCharts started'); // Debug log
+    try {
+      const [statsResponse, activityResponse, trendsResponse] = await Promise.all([
+        fetch('/settlements/api/stats'),
+        fetch('/settlements/api/activity'),
+        fetch('/settlements/api/settlement-trends')
+      ]);
+
+      // Check if responses are OK before parsing JSON
+      if (!statsResponse.ok) {
+        console.error('API Stats fetch failed:', statsResponse.status, statsResponse.statusText);
+        throw new Error('Failed to fetch settlement stats');
+      }
+      if (!activityResponse.ok) {
+        console.error('API Activity fetch failed:', activityResponse.status, activityResponse.statusText);
+        throw new Error('Failed to fetch settlement activity');
+      }
+      if (!trendsResponse.ok) {
+        console.error('API Trends fetch failed:', trendsResponse.status, trendsResponse.statusText);
+        throw new Error('Failed to fetch settlement trends');
+      }
+
+      settlementStats = await statsResponse.json();
+      settlementActivity = await activityResponse.json();
+      settlementTrends = await trendsResponse.json();
+
+      console.log('Fetched Stats:', settlementStats); // Debug log
+      console.log('Fetched Activity:', settlementActivity); // Debug log
+      console.log('Fetched Trends:', settlementTrends); // Debug log
+
+      if (settlementStats.error) {
+        console.error("Error from API Stats:", settlementStats.error);
+        document.getElementById("mainBalance").textContent = "Błąd";
+        document.getElementById("balanceDescription").textContent = settlementStats.error;
+      }
+      if (settlementActivity.error) {
+        console.error("Error from API Activity:", settlementActivity.error);
+      }
+      if (settlementTrends.error) {
+        console.error("Error from API Trends:", settlementTrends.error);
+      }
+
+      calculateMainBalance();
+      createBalanceTrendChart();
+      createActivityChart();
+      createSpendingPerListChart();
+      displayUnsettledTransactions();
+
+    } catch (error) {
+      console.error("Failed to fetch settlement data or render charts:", error);
+      document.getElementById("mainBalance").textContent = "Błąd ładowania";
+      document.getElementById("balanceDescription").textContent = "Sprawdź połączenie lub spróbuj ponownie.";
+      document.getElementById("balanceTrendChartNoData").classList.remove("d-none");
+      document.getElementById("activityChartNoData").classList.remove("d-none");
+      document.getElementById("spendingPerListChartNoData").classList.remove("d-none");
+      document.getElementById("unsettledTransactionsList").innerHTML = '<p class="text-center text-danger">Wystąpił błąd podczas ładowania danych.</p>';
+    }
+  }
+
+  // Initial data fetch and chart rendering
+  document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOMContentLoaded event fired'); // Debug log
+    fetchDataAndRenderCharts();
+  });
+</script>
+{% endblock %}

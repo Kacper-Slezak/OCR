@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+
+{% block title %}Edytuj Listę Zakupów{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Data passed from Flask -->
+    <script>
+        window.shopping_list_items = {{ products_data | tojson }};
+        window.all_friends = {{ all_friends | tojson }};
+    </script>
+    <!-- End Data from Flask -->
+
+    <div class="col-12">
+        <h1 class="mb-4">Edytuj Listę Zakupów</h1>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Left Column (8/12 width) -->
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('receipt.edit_shopping_list', list_id=shopping_list.id if shopping_list else None) }}">
+                    <div class="mb-3">
+                        <label for="list_name" class="form-label fw-bold">Nazwa Listy:</label>
+                        <input type="text" id="list_name" name="list_name"
+                               class="form-control"
+                               value="{{ shopping_list.name if shopping_list else '' }}" required>
+                    </div>
+
+                    <h2 class="h4 mb-3">Produkty i Przypisani Znajomi</h2>
+                    <p class="text-muted mb-3">Dodaj lub edytuj produkty na liście i przypisz znajomych, którzy mają za nie odpowiadać/rozliczyć się.</p>
+
+                    <div id="products-container" class="mb-4 border rounded p-3">
+                        <!-- Products will be injected here by JavaScript -->
+                    </div>
+
+                    <button type="button" id="add-product" class="btn btn-success mb-4">
+                        <i class="fas fa-plus-circle me-2"></i>Dodaj Nowy Produkt
+                    </button>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-save me-2"></i>Zapisz Listę Zakupów
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {# FORMULARZ DO WGROWANIA PARAGONU #}
+        {% if shopping_list %}
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="h4 mb-3">Wgraj Paragon</h2>
+                    <p class="text-muted mb-3">Wgraj zdjęcie paragonu, aby automatycznie dodać produkty do tej listy.</p>
+                    <form action="{{ url_for('receipt.upload_receipt_for_list', list_id=shopping_list.id) }}" method="POST" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <input type="file" name="file" accept="image/*" class="form-control" required>
+                        </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-upload me-2"></i>Wgraj i przetwórz paragon
+                            </button>
+                        </div>
+                    </form>
+
+                    {% if shopping_list.receipts.all() %}
+                        <h3 class="h5 mt-4 mb-3">Powiązane paragony:</h3>
+                        <ul class="list-unstyled">
+                            {% for r in shopping_list.receipts %}
+                                <li class="mb-2 p-2 border rounded">
+                                    <strong>Paragon #{{ r.id }}</strong>
+                                    <span class="badge
+                                        {% if r.status == 'Processed' %}bg-success
+                                        {% elif r.status == 'ERROR' %}bg-danger
+                                        {% elif r.status == 'processing' %}bg-warning
+                                        {% else %}bg-secondary
+                                        {% endif %}">{{ r.status }}</span>
+                                    <div class="mt-1">
+                                        {% if r.status == 'Processed' %}
+                                            <a href="{{ url_for('receipt.review_ocr_results', receipt_id=r.id) }}" class="btn btn-sm btn-outline-primary me-2">
+                                                <i class="fas fa-eye me-1"></i>Przeglądaj OCR i scal
+                                            </a>
+                                            <a href="{{ url_for('receipt.export_receipt_csv', receipt_id=r.id) }}" class="btn btn-sm btn-outline-success me-2">
+                                                <i class="fas fa-file-csv me-1"></i>Eksportuj CSV
+                                            </a>
+                                        {% elif r.status == 'ERROR' %}
+                                            <span class="text-danger">
+                                                <i class="fas fa-exclamation-triangle me-1"></i>Błąd przetwarzania
+                                            </span>
+                                        {% else %} {# Uploaded, Processing #}
+                                            <span class="text-muted">
+                                                <i class="fas fa-spinner fa-spin me-1"></i>Przetwarzanie...
+                                            </span>
+                                        {% endif %}
+                                        <form action="{{ url_for('receipt.delete_receipt', receipt_id=r.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Czy na pewno chcesz usunąć ten paragon?');">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                <i class="fas fa-trash-alt me-1"></i>Usuń
+                                            </button>
+                                        </form>
+                                    </div>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            </div>
+        {% else %}
+            <div class="card">
+                <div class="card-body">
+                    <p class="text-muted mb-0">Zapisz listę zakupów, aby wgrać do niej paragon.</p>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Right Column (4/12 width) -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-body">
+                <h2 class="h4 mb-3">Twoi Znajomi</h2>
+                <p class="text-muted mb-3">Znajomi, których możesz przypisać do produktów.</p>
+                <a href="{{ url_for('main.dashboard') }}" class="btn btn-success mb-3">
+                    <i class="fas fa-user-plus me-2"></i>Dodaj Znajomego
+                </a>
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Nazwa Znajomego</th>
+                            </tr>
+                        </thead>
+                        <tbody id="friends-list-body">
+                            {% for friend in all_friends %}
+                            <tr>
+                                <td>{{ friend.name }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .product-item {
+        padding: 0.75rem;
+        border-bottom: 1px solid #dee2e6;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+    }
+    .product-item:last-child {
+        border-bottom: none;
+    }
+    .checkbox-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding: 0.5rem;
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        flex-basis: 100%;
+        margin-top: 0.5rem;
+    }
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.875rem;
+        white-space: nowrap;
+    }
+    @media (min-width: 768px) {
+        .product-item input[type="text"] {
+            flex: 2;
+            min-width: 150px;
+        }
+        .product-item input[type="number"] {
+            flex: 1;
+            min-width: 100px;
+        }
+        .checkbox-container {
+            flex-basis: auto;
+            margin-top: 0;
+        }
+    }
+</style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const shoppingListItems = window.shopping_list_items;
+    const allFriends = window.all_friends;
+
+    const productsContainer = document.getElementById('products-container');
+    const addProductButton = document.getElementById('add-product');
+
+    let productCounter = 0;
+
+    function createProductItem(product = { name: '', price: '', assigned_friends: [] }) {
+        const div = document.createElement('div');
+        div.classList.add('product-item');
+        div.setAttribute('data-product-index', productCounter);
+
+        let displayPrice = product.price;
+        if (displayPrice !== null && typeof displayPrice === 'object' && 'fixed' in displayPrice) {
+            displayPrice = displayPrice.__fixed__;
+        } else if (displayPrice !== null && !isNaN(parseFloat(displayPrice))) {
+            displayPrice = parseFloat(displayPrice).toFixed(2);
+        } else {
+            displayPrice = '';
+        }
+
+        let friendsCheckboxesHtml = allFriends.map(friend => {
+            const isChecked = product.assigned_friends.includes(friend.id) ? 'checked' : '';
+            return `
+                <label class="checkbox-label">
+                    <input type="checkbox" name="products[${productCounter}][assigned_friends][]" value="${friend.id}" ${isChecked}
+                           class="form-check-input me-1">
+                    ${friend.name}
+                </label>
+            `;
+        }).join('');
+
+        div.innerHTML = `
+            <input type="hidden" name="products[${productCounter}][db_id]" value="${product.db_id || ''}" />
+            <input type="text" name="products[${productCounter}][name]" value="${product.name || ''}" placeholder="Nazwa produktu" required
+                   class="form-control" style="flex: 2; min-width: 150px;" />
+            <input type="number" name="products[${productCounter}][price]" value="${displayPrice || ''}" placeholder="Cena" step="0.01"
+                   class="form-control" style="flex: 1; min-width: 100px;" />
+            <div class="checkbox-container">
+                ${friendsCheckboxesHtml}
+            </div>
+            <button type="button" class="btn btn-danger btn-sm remove-product">
+                <i class="fas fa-trash-alt"></i> Usuń
+            </button>
+        `;
+
+        productsContainer.appendChild(div);
+
+        div.querySelector('.remove-product').addEventListener('click', function() {
+            div.remove();
+            updateProductIndexes();
+        });
+
+        productCounter++;
+        return div;
+    }
+
+    function updateProductIndexes() {
+        const currentProductItems = productsContainer.querySelectorAll('.product-item');
+        currentProductItems.forEach((item, index) => {
+            item.setAttribute('data-product-index', index);
+            item.querySelectorAll('input, select').forEach(input => {
+                const nameAttr = input.name;
+                if (nameAttr) {
+                    // Fixed template literal syntax
+                    input.name = nameAttr.replace(/products\[\d+\]/, `products[${index}]`);
+                }
+            });
+        });
+        productCounter = currentProductItems.length;
+    }
+
+    if (shoppingListItems && shoppingListItems.length > 0) {
+        shoppingListItems.forEach(item => {
+            createProductItem(item);
+        });
+    } else {
+        createProductItem();
+    }
+
+    addProductButton.addEventListener('click', function() {
+        createProductItem();
+    });
+
+    productsContainer.addEventListener('click', function(event) {
+        if (event.target.classList.contains('remove-product') || event.target.closest('.remove-product')) {
+            const button = event.target.closest('.remove-product');
+            button.parentElement.remove();
+            updateProductIndexes();
+        }
+    });
+});
+</script>
+{% endblock %}
