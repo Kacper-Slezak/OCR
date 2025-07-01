@@ -1,0 +1,6 @@
+<p>Witaj {{ user.username }},</p>
+
+<p>Oto Twój kod potwierdzający e-mail:</p>
+<pre style="font-size: 1.4em;">{{ code }}</pre>
+
+<p>Kod jest ważny do {{ expires_at.strftime("%Y-%m-%d %H:%M UTC") }}.</p>
