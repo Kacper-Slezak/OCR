@@ -90,8 +90,9 @@ def edit_shopping_list(list_id):
             db.session.add(new_product)
             db.session.flush()  # Flush, aby uzyskać ID produktu przed przypisaniem znajomych
 
-            # Przypisz znajomych
-            for friend_id in p_data['assigned_friends_ids']:
+            # Przypisz znajomych - Upewnij się, że dodajesz tylko UNIKALNE ID znajomych
+            unique_friend_ids = set(p_data['assigned_friends_ids'])  # Użyj set dla unikalności
+            for friend_id in unique_friend_ids:
                 friend = Friend.query.get(friend_id)
                 if friend and friend.user_id == current_user.id:  # Upewnij się, że znajomy należy do użytkownika
                     new_product.assigned_friends_for_product.append(friend)
@@ -111,8 +112,9 @@ def edit_shopping_list(list_id):
         for product in shopping_list.products:
             products_data.append({
                 'name': product.name,
-                'price': product.price,
+                'price': product.price,  # Już Decimal
                 'assigned_friends': [f.id for f in product.assigned_friends_for_product],
+                'paid_by': product.paid_by,  # Uwzględnij paid_by
                 'db_id': product.id
             })
 
@@ -139,13 +141,14 @@ def delete_shopping_list(list_id):
         return redirect(url_for('main.dashboard'))
 
     try:
+        db.session.delete(shopping_list)
         db.session.commit()
-        flash('Lista zakupów została pomyślnie zapisana!', 'success')
-        return redirect(url_for('main.dashboard'))  # Successfully redirects to the dashboard
+        flash('Lista zakupów została pomyślnie usunięta!', 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Błąd podczas zapisywania listy zakupów: {e}', 'danger')
-        return redirect(request.url)
+        flash(f'Błąd podczas usuwania listy zakupów: {e}', 'danger')
+
+    return redirect(url_for('main.dashboard'))
 
 
 # --- Trasy dotyczące Paragonów i OCR ---
@@ -319,11 +322,30 @@ def merge_ocr_with_list(receipt_id):
         )
         print(f"DEBUG: Wynik scalania z merging_services: {merged_products_data}")
 
-        # Usuń wszystkie obecne produkty i dodaj nowe, scalone.
-        print(f"DEBUG: Usuwanie istniejących produktów dla listy ID: {shopping_list.id}")
+        print(f"DEBUG: Usuwanie istniejących produktów i relacji dla listy ID: {shopping_list.id}")
+
+        # 1. Najpierw znajdź wszystkie produkty z tej listy
+        products_to_delete = Product.query.filter_by(shopping_list_id=shopping_list.id).all()
+        product_ids_to_delete = [p.id for p in products_to_delete]
+
+        # 2. Usuń relacje z product_friend_assignment dla tych produktów
+        if product_ids_to_delete:
+            from sqlalchemy import text
+            # Tworzymy placeholder dla każdego ID
+            placeholders = ','.join(['?' for _ in product_ids_to_delete])
+            db.session.execute(
+                text(f"DELETE FROM product_friend_assignment WHERE product_id IN ({placeholders})"),
+                product_ids_to_delete
+            )
+            print(f"DEBUG: Usunięto relacje dla produktów: {product_ids_to_delete}")
+
+        # 3. Teraz usuń produkty
         Product.query.filter_by(shopping_list_id=shopping_list.id).delete()
         db.session.commit()  # Zatwierdź usunięcie przed dodaniem nowych
         print(f"DEBUG: Istniejące produkty usunięte. Dodawanie scalonych produktów.")
+
+        # 4. Opcjonalnie: wyczyść cache sesji SQLAlchemy
+        db.session.expunge_all()
 
         for item_data in merged_products_data:
             price_decimal = None
@@ -348,26 +370,67 @@ def merge_ocr_with_list(receipt_id):
                 is_purchased=False  # Zakładamy, że nowe/scalane elementy nie są jeszcze zakupione
             )
 
-            # Przypisz znajomych (jeśli byli przypisani w oryginalnej liście lub są nowi)
-            if 'assigned_friends' in item_data and item_data['assigned_friends']:
-                for friend_id in item_data['assigned_friends']:
-                    friend_obj = Friend.query.get(friend_id)
-                    if friend_obj and friend_obj.user_id == current_user.id:  # Sprawdź własność
-                        new_product.assigned_friends_for_product.append(friend_obj)
-
+            # Add product to session and flush to get the ID
             db.session.add(new_product)
+            db.session.flush()  # This assigns an ID to new_product
 
+            # POPRAWKA: Bezpieczne przypisywanie znajomych z deduplikacją
+            if 'assigned_friends' in item_data and item_data['assigned_friends']:
+                # Ensure unique friend IDs and validate ownership
+                unique_assigned_friends = set(item_data['assigned_friends'])
+                print(f"DEBUG: Przypisywanie znajomych {unique_assigned_friends} do produktu {new_product.id}")
+
+                for friend_id in unique_assigned_friends:
+                    try:
+                        # Validate that friend_id is valid and belongs to current_user
+                        friend_obj = Friend.query.filter_by(
+                            id=friend_id,
+                            user_id=current_user.id
+                        ).first()
+
+                        if friend_obj:
+                            # Sprawdź czy relacja już istnieje w bazie danych
+                            from sqlalchemy import text
+                            existing_assignment = db.session.execute(
+                                text(
+                                    "SELECT 1 FROM product_friend_assignment WHERE product_id = :product_id AND friend_id = :friend_id"),
+                                {"product_id": new_product.id, "friend_id": friend_id}
+                            ).fetchone()
+
+                            if existing_assignment:
+                                print(
+                                    f"DEBUG: Relacja produkt {new_product.id} - znajomy {friend_id} już istnieje, pomijam")
+                                continue
+
+                            # Sprawdź też w sesji SQLAlchemy
+                            if friend_obj not in new_product.assigned_friends_for_product:
+                                new_product.assigned_friends_for_product.append(friend_obj)
+                                print(f"DEBUG: Dodano znajomego {friend_id} do produktu {new_product.id}")
+                            else:
+                                print(
+                                    f"DEBUG: Friend {friend_id} already assigned to product {new_product.id} in session")
+                        else:
+                            print(
+                                f"WARNING: Friend ID {friend_id} not found or doesn't belong to user {current_user.id}")
+
+                    except Exception as e:
+                        print(
+                            f"ERROR: Błąd podczas przypisywania znajomego {friend_id} do produktu {new_product.id}: {e}")
+                        # Kontynuuj z następnym znajomym zamiast przerywać cały proces
+                        continue
+
+        # Commit all changes at once
         db.session.commit()
         flash(f'Produkty z paragonu zostały scalone z listą "{shopping_list.name}".', 'success')
         print(f"DEBUG: Scalanie zakończone sukcesem dla listy ID: {shopping_list.id}. Przekierowanie do edycji listy.")
-        # Po scaleniu i zapisaniu, przekieruj z powrotem na stronę edycji listy, aby zobaczyć zmiany
+
         return redirect(url_for('receipt.edit_shopping_list', list_id=shopping_list.id))
+
     except Exception as e:
         db.session.rollback()
         flash(f'Wystąpił błąd podczas scalania produktów: {e}', 'danger')
         print(f"ERROR: Błąd podczas scalania dla paragonu ID: {receipt_id}: {e}")
         return redirect(url_for('receipt.review_ocr_results', receipt_id=receipt.id))
-
 
 @receipt_bp.route('/receipt/delete/<int:receipt_id>', methods=['POST'])
 @login_required

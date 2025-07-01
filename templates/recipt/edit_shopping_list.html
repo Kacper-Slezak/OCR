@@ -1,333 +1,291 @@
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Twoja Lista Zakupów</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Font Awesome for icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6;
-            color: #374151;
-        }
-        .container {
-            max-width: 1200px;
-        }
-        .product-item {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem; /* 12px */
-            padding: 0.5rem 0;
-            border-bottom: 1px solid #e5e7eb;
-            flex-wrap: wrap; /* Allow wrapping on smaller screens */
-        }
-        .product-item:last-child {
-            border-bottom: none;
-        }
-        .product-item input[type="text"],
-        .product-item input[type="number"] {
-            padding: 0.5rem;
-            border-radius: 0.375rem; /* rounded-md */
-            border: 1px solid #d1d5db;
-            flex-grow: 1; /* Allow inputs to grow */
-            min-width: 120px; /* Minimum width for inputs */
-        }
-        .remove-product {
-            background-color: #ef4444; /* red-500 */
-            color: white;
-            padding: 0.5rem 0.75rem;
-            border-radius: 0.375rem;
-            font-size: 0.875rem; /* text-sm */
-            cursor: pointer;
-            transition: background-color 0.2s;
-            flex-shrink: 0; /* Prevent shrinking */
-        }
-        .remove-product:hover {
-            background-color: #dc2626; /* red-600 */
-        }
-        .btn-primary {
-            background-color: #2563eb; /* blue-600 */
-            color: white;
-            padding: 0.75rem 1.5rem;
-            border-radius: 0.5rem; /* rounded-lg */
-            font-size: 1rem;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        .btn-primary:hover {
-            background-color: #1d4ed8; /* blue-700 */
-        }
-        .checkbox-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            margin-top: 0.25rem;
-            padding: 0.5rem;
-            border: 1px solid #e5e7eb;
-            border-radius: 0.375rem;
-            flex-basis: 100%; /* Take full width on a new line */
-            box-sizing: border-box; /* Include padding and border in the element's total width */
-        }
-        .checkbox-label {
-            display: flex;
-            align-items: center;
-            gap: 0.25rem;
-            font-size: 0.875rem;
-            white-space: nowrap;
-        }
-        .table-auto {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .table-auto th, .table-auto td {
-            padding: 0.75rem;
-            text-align: left;
-            border-bottom: 1px solid #e5e7eb;
-        }
+{% extends "base.html" %}
 
-        .table-auto th {
-            background-color: #f9fafb;
-            font-weight: 600;
-        }
-        .receipt-status {
-            font-weight: bold;
-        }
-        .status-Uploaded { color: #6b7280; } /* gray-500 */
-        .status-processing { color: #f59e0b; } /* amber-500 */
-        .status-Processed { color: #10b981; } /* green-500 */
-        .status-ERROR { color: #ef4444; } /* red-500 */
-    </style>
-</head>
-<body class="bg-gray-100 p-8">
-    <div class="container mx-auto bg-white rounded-lg shadow-xl p-8">
-        <!-- Data passed from Flask -->
-        <script>
-            window.shopping_list_items = {{ products_data | tojson }};
-            window.all_friends = {{ all_friends | tojson }};
-        </script>
-        <!-- End Data from Flask -->
+{% block title %}Edytuj Listę Zakupów{% endblock %}
 
-        <h1 class="text-3xl font-bold text-gray-800 mb-6">Edytuj Listę Zakupów</h1>
+{% block content %}
+<div class="row">
+    <!-- Data passed from Flask -->
+    <script>
+        window.shopping_list_items = {{ products_data | tojson }};
+        window.all_friends = {{ all_friends | tojson }};
+    </script>
+    <!-- End Data from Flask -->
 
-        <div class="flex flex-col lg:flex-row gap-8">
-            <!-- Left Column (2/3 width on large screens) -->
-            <div class="lg:w-2/3">
-                <form method="POST" action="{{ url_for('receipt.edit_shopping_list', list_id=shopping_list.id if shopping_list else None) }}" class="bg-white p-6 rounded-lg shadow-lg">
+    <div class="col-12">
+        <h1 class="mb-4">Edytuj Listę Zakupów</h1>
+    </div>
+</div>
 
-                    <div class="mb-4">
-                        <label for="list_name" class="block text-gray-700 text-sm font-bold mb-2">Nazwa Listy:</label>
+<div class="row">
+    <!-- Left Column (8/12 width) -->
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('receipt.edit_shopping_list', list_id=shopping_list.id if shopping_list else None) }}">
+                    <div class="mb-3">
+                        <label for="list_name" class="form-label fw-bold">Nazwa Listy:</label>
                         <input type="text" id="list_name" name="list_name"
-                               class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                               class="form-control"
                                value="{{ shopping_list.name if shopping_list else '' }}" required>
                     </div>
 
-                    <h2 class="text-2xl font-semibold text-gray-800 mb-4">Produkty i Przypisani Znajomi</h2>
-                    <p class="text-gray-600 mb-4">Dodaj lub edytuj produkty na liście i przypisz znajomych, którzy mają za nie odpowiadać/rozliczyć się.</p>
+                    <h2 class="h4 mb-3">Produkty i Przypisani Znajomi</h2>
+                    <p class="text-muted mb-3">Dodaj lub edytuj produkty na liście i przypisz znajomych, którzy mają za nie odpowiadać/rozliczyć się.</p>
 
-                    <div id="products-container" class="mb-6 border border-gray-200 rounded-lg overflow-hidden">
+                    <div id="products-container" class="mb-4 border rounded p-3">
                         <!-- Products will be injected here by JavaScript -->
                     </div>
 
-                    <button type="button" id="add-product" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-md shadow transition duration-150 ease-in-out">
-                        <i class="fas fa-plus-circle mr-2"></i>Dodaj Nowy Produkt
+                    <button type="button" id="add-product" class="btn btn-success mb-4">
+                        <i class="fas fa-plus-circle me-2"></i>Dodaj Nowy Produkt
                     </button>
 
-                    <div class="mt-8">
-                        <button type="submit" class="btn-primary w-full shadow-lg">
-                            <i class="fas fa-save mr-2"></i>Zapisz Listę Zakupów
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="fas fa-save me-2"></i>Zapisz Listę Zakupów
                         </button>
                     </div>
                 </form>
-
-                {# NOWY FORMULARZ DO WGROWANIA PARAGONU #}
-                {% if shopping_list %}
-                    <div class="mt-8 bg-white p-6 rounded-lg shadow-lg">
-                        <h2 class="text-2xl font-semibold text-gray-800 mb-4">Wgraj Paragon</h2>
-                        <p class="text-gray-600 mb-4">Wgraj zdjęcie paragonu, aby automatycznie dodać produkty do tej listy.</p>
-                        <form action="{{ url_for('receipt.upload_receipt_for_list', list_id=shopping_list.id) }}" method="POST" enctype="multipart/form-data">
-                            <input type="file" name="file" accept="image/*" class="block w-full text-sm text-gray-500
-                                file:mr-4 file:py-2 file:px-4
-                                file:rounded-full file:border-0
-                                file:text-sm file:font-semibold
-                                file:bg-violet-50 file:text-violet-700
-                                hover:file:bg-violet-100 mb-4" required>
-                            <button type="submit" class="btn-primary w-full shadow-lg">
-                                <i class="fas fa-upload mr-2"></i>Wgraj i przetwórz paragon
-                            </button>
-                        </form>
-                        {% if shopping_list.receipts.all() %}
-                            <h3 class="text-lg font-semibold text-gray-800 mt-6 mb-3">Powiązane paragony:</h3>
-                            <ul class="list-disc ml-5">
-                                {% for r in shopping_list.receipts %}
-                                    <li class="mb-2">
-                                        Paragon #{{ r.id }} (Status: <span class="receipt-status status-{{ r.status }}">{{ r.status }}</span>) -
-                                        {% if r.status == 'Processed' %}
-                                            <a href="{{ url_for('receipt.review_ocr_results', receipt_id=r.id) }}" class="text-blue-600 hover:underline"><i class="fas fa-eye mr-1"></i>Przeglądaj OCR i scal</a>
-                                            <a href="{{ url_for('receipt.export_receipt_csv', receipt_id=r.id) }}" class="text-green-600 hover:underline ml-3"><i class="fas fa-file-csv mr-1"></i>Eksportuj CSV</a>
-                                            <form action="{{ url_for('receipt.delete_receipt', receipt_id=r.id) }}" method="POST" class="inline-block ml-3" onsubmit="return confirm('Czy na pewno chcesz usunąć ten paragon?');">
-                                                <button type="submit" class="text-red-600 hover:underline bg-transparent border-none p-0 cursor-pointer"><i class="fas fa-trash-alt mr-1"></i>Usuń</button>
-                                            </form>
-                                        {% elif r.status == 'ERROR' %}
-                                            <span class="text-red-500"><i class="fas fa-exclamation-triangle mr-1"></i>Błąd przetwarzania</span>
-                                            <form action="{{ url_for('receipt.delete_receipt', receipt_id=r.id) }}" method="POST" class="inline-block ml-3" onsubmit="return confirm('Czy na pewno chcesz usunąć ten paragon?');">
-                                                <button type="submit" class="text-red-600 hover:underline bg-transparent border-none p-0 cursor-pointer"><i class="fas fa-trash-alt mr-1"></i>Usuń</button>
-                                            </form>
-                                        {% else %} {# Uploaded, Processing #}
-                                            <span class="text-gray-500"><i class="fas fa-spinner fa-spin mr-1"></i>Przetwarzanie...</span>
-                                            <form action="{{ url_for('receipt.delete_receipt', receipt_id=r.id) }}" method="POST" class="inline-block ml-3" onsubmit="return confirm('Czy na pewno chcesz usunąć ten paragon?');">
-                                                <button type="submit" class="text-red-600 hover:underline bg-transparent border-none p-0 cursor-pointer"><i class="fas fa-trash-alt mr-1"></i>Usuń</button>
-                                            </form>
-                                        {% endif %}
-                                    </li>
-                                {% endfor %}
-                            </ul>
-                        {% endif %}
-                    </div>
-                {% else %}
-                    <div class="mt-8 bg-white p-6 rounded-lg shadow-lg">
-                        <p class="text-gray-600">Zapisz listę zakupów, aby wgrać do niej paragon.</p>
-                    </div>
-                {% endif %}
-
             </div>
+        </div>
 
-            <!-- Right Column (1/3 width on large screens) -->
-            <div class="lg:w-1/3">
-                <div class="bg-white p-6 rounded-lg shadow-lg">
-                    <h2 class="text-2xl font-semibold text-gray-800 mb-4">Twoi Znajomi</h2>
-                    <p class="text-gray-600 mb-4">Znajomi, których możesz przypisać do produktów.</p>
-                    <a href="{{ url_for('main.dashboard') }}" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-md shadow transition duration-150 ease-in-out mb-4 inline-block">
-                        <i class="fas fa-user-plus mr-2"></i>Dodaj Znajomego
-                    </a>
-                    <div class="border border-gray-200 rounded-lg overflow-hidden">
-                        <table class="table-auto">
-                            <thead>
-                                <tr>
-                                    <th class="px-4 py-2 bg-gray-50">Nazwa Znajomego</th>
-                                </tr>
-                            </thead>
-                            <tbody id="friends-list-body">
-                                {% for friend in all_friends %}
-                                <tr>
-                                    <td class="px-4 py-2">{{ friend.name }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+        {# FORMULARZ DO WGROWANIA PARAGONU #}
+        {% if shopping_list %}
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="h4 mb-3">Wgraj Paragon</h2>
+                    <p class="text-muted mb-3">Wgraj zdjęcie paragonu, aby automatycznie dodać produkty do tej listy.</p>
+                    <form action="{{ url_for('receipt.upload_receipt_for_list', list_id=shopping_list.id) }}" method="POST" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <input type="file" name="file" accept="image/*" class="form-control" required>
+                        </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-upload me-2"></i>Wgraj i przetwórz paragon
+                            </button>
+                        </div>
+                    </form>
+                    
+                    {% if shopping_list.receipts.all() %}
+                        <h3 class="h5 mt-4 mb-3">Powiązane paragony:</h3>
+                        <ul class="list-unstyled">
+                            {% for r in shopping_list.receipts %}
+                                <li class="mb-2 p-2 border rounded">
+                                    <strong>Paragon #{{ r.id }}</strong> 
+                                    <span class="badge 
+                                        {% if r.status == 'Processed' %}bg-success
+                                        {% elif r.status == 'ERROR' %}bg-danger
+                                        {% elif r.status == 'processing' %}bg-warning
+                                        {% else %}bg-secondary
+                                        {% endif %}">{{ r.status }}</span>
+                                    <div class="mt-1">
+                                        {% if r.status == 'Processed' %}
+                                            <a href="{{ url_for('receipt.review_ocr_results', receipt_id=r.id) }}" class="btn btn-sm btn-outline-primary me-2">
+                                                <i class="fas fa-eye me-1"></i>Przeglądaj OCR i scal
+                                            </a>
+                                            <a href="{{ url_for('receipt.export_receipt_csv', receipt_id=r.id) }}" class="btn btn-sm btn-outline-success me-2">
+                                                <i class="fas fa-file-csv me-1"></i>Eksportuj CSV
+                                            </a>
+                                        {% elif r.status == 'ERROR' %}
+                                            <span class="text-danger">
+                                                <i class="fas fa-exclamation-triangle me-1"></i>Błąd przetwarzania
+                                            </span>
+                                        {% else %} {# Uploaded, Processing #}
+                                            <span class="text-muted">
+                                                <i class="fas fa-spinner fa-spin me-1"></i>Przetwarzanie...
+                                            </span>
+                                        {% endif %}
+                                        <form action="{{ url_for('receipt.delete_receipt', receipt_id=r.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Czy na pewno chcesz usunąć ten paragon?');">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                <i class="fas fa-trash-alt me-1"></i>Usuń
+                                            </button>
+                                        </form>
+                                    </div>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            </div>
+        {% else %}
+            <div class="card">
+                <div class="card-body">
+                    <p class="text-muted mb-0">Zapisz listę zakupów, aby wgrać do niej paragon.</p>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Right Column (4/12 width) -->
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-body">
+                <h2 class="h4 mb-3">Twoi Znajomi</h2>
+                <p class="text-muted mb-3">Znajomi, których możesz przypisać do produktów.</p>
+                <a href="{{ url_for('main.dashboard') }}" class="btn btn-success mb-3">
+                    <i class="fas fa-user-plus me-2"></i>Dodaj Znajomego
+                </a>
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Nazwa Znajomego</th>
+                            </tr>
+                        </thead>
+                        <tbody id="friends-list-body">
+                            {% for friend in all_friends %}
+                            <tr>
+                                <td>{{ friend.name }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
     </div>
+</div>
 
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const shoppingListItems = window.shopping_list_items;
-        const allFriends = window.all_friends;
-
-        const productsContainer = document.getElementById('products-container');
-        const addProductButton = document.getElementById('add-product');
-
-        let productCounter = 0; // Initialize a counter for unique product indexes
-
-        function createProductItem(product = { name: '', price: '', assigned_friends: [] }) {
-            const div = document.createElement('div');
-            // Add Tailwind classes for styling (flex, items-center, gap, padding, border-bottom)
-            div.classList.add('product-item', 'flex', 'items-center', 'gap-3', 'p-3', 'border-b', 'border-gray-200', 'last:border-b-0', 'flex-wrap'); // Added flex-wrap for responsiveness
-            div.setAttribute('data-product-index', productCounter); // Use current productCounter for index
-
-            let displayPrice = product.price;
-            // Handle Decimal objects passed from Flask's tojson
-            if (displayPrice !== null && typeof displayPrice === 'object' && 'fixed' in displayPrice) {
-                displayPrice = displayPrice.__fixed__;
-            } else if (displayPrice !== null && !isNaN(parseFloat(displayPrice))) {
-                displayPrice = parseFloat(displayPrice).toFixed(2);
-            } else {
-                displayPrice = '';
-            }
-
-            // Generate friend checkboxes HTML
-            let friendsCheckboxesHtml = allFriends.map(friend => {
-                const isChecked = product.assigned_friends.includes(friend.id) ? 'checked' : '';
-                return `
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="products[${productCounter}][assigned_friends][]" value="${friend.id}" ${isChecked}
-                               class="form-checkbox h-4 w-4 text-blue-600 rounded">
-                        ${friend.name}
-                    </label>
-                `;
-            }).join('');
-
-            div.innerHTML = `
-                <input type="text" name="products[${productCounter}][name]" value="${product.name || ''}" placeholder="Nazwa produktu" required
-                       class="flex-grow p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[150px]" />
-                <input type="number" name="products[${productCounter}][price]" value="${displayPrice || ''}" placeholder="Cena" step="0.01"
-                       class="flex-grow p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 w-24" />
-                <div class="checkbox-container flex-grow-0 basis-full md:basis-auto">
-                    ${friendsCheckboxesHtml}
-                </div>
-                <button type="button" class="remove-product bg-red-500 hover:bg-red-600 text-white p-2 rounded-md transition duration-150 ease-in-out flex-shrink-0">
-                    <i class="fas fa-trash-alt"></i> Usuń
-                </button>
-            `;
-
-            productsContainer.appendChild(div);
-
-            // Attach event listener for the new remove button
-            div.querySelector('.remove-product').addEventListener('click', function() {
-                div.remove();
-                // Re-index inputs after removal
-                updateProductIndexes();
-            });
-
-            productCounter++; // Increment counter for the next product
-            return div; // Return the created div
+<style>
+    .product-item {
+        padding: 0.75rem;
+        border-bottom: 1px solid #dee2e6;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+    }
+    .product-item:last-child {
+        border-bottom: none;
+    }
+    .checkbox-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding: 0.5rem;
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        flex-basis: 100%;
+        margin-top: 0.5rem;
+    }
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.875rem;
+        white-space: nowrap;
+    }
+    @media (min-width: 768px) {
+        .product-item input[type="text"] {
+            flex: 2;
+            min-width: 150px;
         }
-
-        function updateProductIndexes() {
-            // Re-index all product items to maintain correct array indexing in form submission
-            const currentProductItems = productsContainer.querySelectorAll('.product-item');
-            currentProductItems.forEach((item, index) => {
-                item.setAttribute('data-product-index', index);
-                item.querySelectorAll('input, select').forEach(input => {
-                    const nameAttr = input.name;
-                    if (nameAttr) {
-                        input.name = nameAttr.replace(/products\[\d+\]/, 'products[$ {index}]');
-                    }
-                });
-            });
-            productCounter = currentProductItems.length; // Reset productCounter to the current number of items
+        .product-item input[type="number"] {
+            flex: 1;
+            min-width: 100px;
         }
+        .checkbox-container {
+            flex-basis: auto;
+            margin-top: 0;
+        }
+    }
+</style>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const shoppingListItems = window.shopping_list_items;
+    const allFriends = window.all_friends;
 
-        // Load existing products on page load
-        if (shoppingListItems && shoppingListItems.length > 0) {
-            shoppingListItems.forEach(item => {
-                createProductItem(item);
-            });
+    const productsContainer = document.getElementById('products-container');
+    const addProductButton = document.getElementById('add-product');
+
+    let productCounter = 0;
+
+    function createProductItem(product = { name: '', price: '', assigned_friends: [] }) {
+        const div = document.createElement('div');
+        div.classList.add('product-item');
+        div.setAttribute('data-product-index', productCounter);
+
+        let displayPrice = product.price;
+        if (displayPrice !== null && typeof displayPrice === 'object' && 'fixed' in displayPrice) {
+            displayPrice = displayPrice.__fixed__;
+        } else if (displayPrice !== null && !isNaN(parseFloat(displayPrice))) {
+            displayPrice = parseFloat(displayPrice).toFixed(2);
         } else {
-            // If no existing products, add one empty product row by default for new lists
-            createProductItem();
+            displayPrice = '';
         }
 
-        // --- IMPORTANT: Add the event listener for the "Add New Product" button ---
-        addProductButton.addEventListener('click', function() {
-            createProductItem();
+        let friendsCheckboxesHtml = allFriends.map(friend => {
+            const isChecked = product.assigned_friends.includes(friend.id) ? 'checked' : '';
+            return `
+                <label class="checkbox-label">
+                    <input type="checkbox" name="products[${productCounter}][assigned_friends][]" value="${friend.id}" ${isChecked}
+                           class="form-check-input me-1">
+                    ${friend.name}
+                </label>
+            `;
+        }).join('');
+
+        div.innerHTML = `
+            <input type="hidden" name="products[${productCounter}][db_id]" value="${product.db_id || ''}" />
+            <input type="text" name="products[${productCounter}][name]" value="${product.name || ''}" placeholder="Nazwa produktu" required
+                   class="form-control" style="flex: 2; min-width: 150px;" />
+            <input type="number" name="products[${productCounter}][price]" value="${displayPrice || ''}" placeholder="Cena" step="0.01"
+                   class="form-control" style="flex: 1; min-width: 100px;" />
+            <div class="checkbox-container">
+                ${friendsCheckboxesHtml}
+            </div>
+            <button type="button" class="btn btn-danger btn-sm remove-product">
+                <i class="fas fa-trash-alt"></i> Usuń
+            </button>
+        `;
+
+        productsContainer.appendChild(div);
+
+        div.querySelector('.remove-product').addEventListener('click', function() {
+            div.remove();
+            updateProductIndexes();
         });
 
-        // Add event listener to handle removal of dynamically added products (delegation if needed, but direct attach is fine here)
-        productsContainer.addEventListener('click', function(event) {
-            if (event.target.classList.contains('remove-product') || event.target.closest('.remove-product')) {
-                const button = event.target.closest('.remove-product');
-                button.parentElement.remove(); // Remove the entire product-item div
-                updateProductIndexes(); // Re-index after removal
-            }
+        productCounter++;
+        return div;
+    }
+
+    function updateProductIndexes() {
+        const currentProductItems = productsContainer.querySelectorAll('.product-item');
+        currentProductItems.forEach((item, index) => {
+            item.setAttribute('data-product-index', index);
+            item.querySelectorAll('input, select').forEach(input => {
+                const nameAttr = input.name;
+                if (nameAttr) {
+                    // Fixed template literal syntax
+                    input.name = nameAttr.replace(/products\[\d+\]/, `products[${index}]`);
+                }
+            });
         });
+        productCounter = currentProductItems.length;
+    }
+
+    if (shoppingListItems && shoppingListItems.length > 0) {
+        shoppingListItems.forEach(item => {
+            createProductItem(item);
+        });
+    } else {
+        createProductItem();
+    }
+
+    addProductButton.addEventListener('click', function() {
+        createProductItem();
     });
+
+    productsContainer.addEventListener('click', function(event) {
+        if (event.target.classList.contains('remove-product') || event.target.closest('.remove-product')) {
+            const button = event.target.closest('.remove-product');
+            button.parentElement.remove();
+            updateProductIndexes();
+        }
+    });
+});
 </script>
-</body>
-</html>
+{% endblock %}
