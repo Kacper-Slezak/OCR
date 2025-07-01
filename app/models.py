@@ -128,7 +128,7 @@ class Settlement(db.Model):
     settled_at = db.Column(db.DateTime, nullable=True)
 
     # Sprawdzenie, czy tylko jeden z pól dłużnika/wierzyciela jest wypełniony
-    __table_args__ = (
+    _table_args_ = (
         db.CheckConstraint(
             '(debtor_user_id IS NOT NULL AND debtor_friend_id IS NULL) OR '
             '(debtor_user_id IS NULL AND debtor_friend_id IS NOT NULL)',

@@ -1,20 +1,17 @@
-# app/routes/receipt.py
-
 from flask import render_template, Blueprint, redirect, url_for, flash, request, current_app as app, send_file, \
     make_response, abort
 from flask_login import login_required, current_user
 from app import db
-from app.models import ShoppingList, Product, Receipt, Friend, User  # Ensure User is imported for participants
-from app.services.ocr_services import process_receipt_image  # Your existing OCR service
-from app.services.merging_services import match_ocr_to_shopping_list  # Renamed from ocr_matching_service
+from app.models import ShoppingList, Product, Receipt, Friend, User
+from app.services.ocr_services import process_receipt_image
+from app.services.merging_services import match_ocr_to_shopping_list
 from decimal import Decimal, InvalidOperation
 import os
 from werkzeug.utils import secure_filename
 import io
-import csv  # For CSV export
+import csv
 
 receipt_bp = Blueprint('receipt', __name__)
-
 
 # --- Trasy dotyczące List Zakupów ---
 
@@ -42,22 +39,30 @@ def edit_shopping_list(list_id):
             return redirect(
                 url_for('receipt.edit_shopping_list', list_id=list_id) if list_id else url_for('main.dashboard'))
 
+        is_new_list = shopping_list is None
+
         if shopping_list:
             shopping_list.name = list_name
         else:
             shopping_list = ShoppingList(name=list_name, created_by=current_user.id)
             db.session.add(shopping_list)
-            db.session.flush()  # Potrzebne do uzyskania ID dla nowej listy przed dodaniem produktów
+            db.session.flush() # Potrzebne do uzyskania ID dla nowej listy przed dodaniem produktów
 
-        # Obsługa produktów z formularza
-        products_data = []
+        # --- Zaktualizowana logika obsługi produktów ---
+        # Pobierz bieżące produkty z bazy danych
+        existing_products = {p.id: p for p in shopping_list.products} if shopping_list else {}
+        products_to_keep_ids = set() # Zbiór ID produktów, które mają pozostać (zaktualizowane lub niezmienione)
+
         i = 0
         while f'products[{i}][name]' in request.form:
+            product_id_str = request.form.get(f'products[{i}][db_id]', '').strip()
             product_name = request.form.get(f'products[{i}][name]', '').strip()
             product_price_str = request.form.get(f'products[{i}][price]', '').strip()
             assigned_friends_ids = request.form.getlist(f'products[{i}][assigned_friends][]')
 
-            if product_name:  # Przetwarzaj tylko produkty z nazwą
+            product_id = int(product_id_str) if product_id_str.isdigit() else None
+
+            if product_name: # Przetwarzaj tylko produkty z nazwą
                 product_price = Decimal('0.00')
                 if product_price_str:
                     try:
@@ -66,43 +71,69 @@ def edit_shopping_list(list_id):
                         flash(f'Nieprawidłowy format ceny dla produktu "{product_name}". Użyto 0.00.', 'warning')
                         product_price = Decimal('0.00')
 
-                products_data.append({
-                    'name': product_name,
-                    'price': product_price,
-                    'assigned_friends_ids': [int(fid) for fid in assigned_friends_ids if fid.isdigit()]
-                })
+                # Sprawdź, czy to istniejący produkt do aktualizacji, czy nowy
+                if product_id and product_id in existing_products:
+                    # Aktualizuj istniejący produkt
+                    product_obj = existing_products[product_id]
+                    product_obj.name = product_name
+                    product_obj.price = product_price
+
+                    # Aktualizuj przypisanych znajomych
+                    current_assigned_friends_ids = {f.id for f in product_obj.assigned_friends_for_product}
+                    new_assigned_friends_ids_set = {int(fid) for fid in assigned_friends_ids if fid.isdigit()}
+
+                    # Usuń znajomych, którzy zostali odznaczeni
+                    for friend_id in current_assigned_friends_ids - new_assigned_friends_ids_set:
+                        friend_to_remove = Friend.query.get(friend_id)
+                        if friend_to_remove: # Upewnij się, że znajomy istnieje
+                            product_obj.assigned_friends_for_product.remove(friend_to_remove)
+
+                    # Dodaj nowych znajomych, którzy zostali zaznaczeni
+                    for friend_id in new_assigned_friends_ids_set - current_assigned_friends_ids:
+                        friend_to_add = Friend.query.get(friend_id)
+                        if friend_to_add and friend_to_add.user_id == current_user.id: # Sprawdź własność znajomego
+                            product_obj.assigned_friends_for_product.append(friend_to_add)
+
+                    products_to_keep_ids.add(product_id) # Oznacz, że ten produkt ma pozostać
+                else:
+                    # Dodaj nowy produkt
+                    new_product = Product(
+                        name=product_name,
+                        price=product_price,
+                        shopping_list_id=shopping_list.id,
+                        paid_by=current_user.id, # Zakładamy, że aktualny użytkownik płaci
+                        is_purchased=False
+                    )
+                    db.session.add(new_product)
+                    db.session.flush() # Flush, aby uzyskać ID dla nowego produktu przed przypisaniem znajomych
+
+                    # Przypisz znajomych do nowego produktu
+                    for friend_id in [int(fid) for fid in assigned_friends_ids if fid.isdigit()]:
+                        friend = Friend.query.get(friend_id)
+                        if friend and friend.user_id == current_user.id:
+                            new_product.assigned_friends_for_product.append(friend)
             i += 1
 
-        # Usuń istniejące produkty dla tej listy przed dodaniem nowych z formularza
-        # To upraszcza aktualizacje, ale oznacza utratę historii produktów.
-        if shopping_list.id:
-            Product.query.filter_by(shopping_list_id=shopping_list.id).delete()
-            db.session.flush()  # Upewnij się, że usunięcia są przetworzone przed dodaniem nowych produktów
-
-        for p_data in products_data:
-            new_product = Product(
-                name=p_data['name'],
-                price=p_data['price'],
-                shopping_list_id=shopping_list.id,
-                paid_by=current_user.id,  # Zakładamy, że aktualny użytkownik płaci
-                is_purchased=False
-            )
-            db.session.add(new_product)
-            db.session.flush()  # Flush, aby uzyskać ID produktu przed przypisaniem znajomych
-
-            # Przypisz znajomych
-            for friend_id in p_data['assigned_friends_ids']:
-                friend = Friend.query.get(friend_id)
-                if friend and friend.user_id == current_user.id:  # Upewnij się, że znajomy należy do użytkownika
-                    new_product.assigned_friends_for_product.append(friend)
+        # Usuń produkty, które były w bazie danych, ale nie zostały przesłane w formularzu
+        # (czyli te, które użytkownik usunął w UI)
+        for product_id, product_obj in existing_products.items():
+            if product_id not in products_to_keep_ids:
+                db.session.delete(product_obj)
+        # --- Koniec zaktualizowanej logiki obsługi produktów ---
 
         try:
             db.session.commit()
-            flash('Lista zakupów została pomyślnie zapisana!', 'success')
+
+            if is_new_list:
+                flash('Lista zakupów została pomyślnie utworzona! Teraz możesz wgrać paragon.', 'success')
+            else:
+                flash('Lista zakupów została pomyślnie zaktualizowana!', 'success')
+
             return redirect(url_for('receipt.edit_shopping_list', list_id=shopping_list.id))
         except Exception as e:
             db.session.rollback()
             flash(f'Błąd podczas zapisywania listy zakupów: {e}', 'danger')
+            app.logger.exception("Błąd podczas zapisywania listy zakupów") # Dodaj logowanie błędu
             return redirect(request.url)
 
     # Żądanie GET: Wyświetl formularz
@@ -113,14 +144,14 @@ def edit_shopping_list(list_id):
                 'name': product.name,
                 'price': product.price,
                 'assigned_friends': [f.id for f in product.assigned_friends_for_product],
-                'db_id': product.id
+                'db_id': product.id # Przekazujemy ID produktu do JS
             })
 
     all_friends_for_user = current_user.friends_owned.all()
     all_friends_for_js = [{'id': friend.id, 'name': friend.name} for friend in all_friends_for_user]
 
     return render_template(
-        'recipt/edit_shopping_list.html',  # Zmieniona nazwa szablonu
+        'recipt/edit_shopping_list.html',
         shopping_list=shopping_list,
         products_data=products_data,
         all_friends=all_friends_for_js
@@ -139,13 +170,14 @@ def delete_shopping_list(list_id):
         return redirect(url_for('main.dashboard'))
 
     try:
+        db.session.delete(shopping_list)
         db.session.commit()
-        flash('Lista zakupów została pomyślnie zapisana!', 'success')
-        return redirect(url_for('main.dashboard'))  # Successfully redirects to the dashboard
+        flash('Lista zakupów została pomyślnie usunięta!', 'success')
+        return redirect(url_for('main.dashboard'))
     except Exception as e:
         db.session.rollback()
-        flash(f'Błąd podczas zapisywania listy zakupów: {e}', 'danger')
-        return redirect(request.url)
+        flash(f'Błąd podczas usuwania listy zakupów: {e}', 'danger')
+        return redirect(url_for('main.dashboard'))
 
 
 # --- Trasy dotyczące Paragonów i OCR ---
@@ -163,7 +195,7 @@ def upload_receipt_for_list(list_id):
     Wgrywa obraz paragonu dla konkretnej listy zakupów i inicjuje proces OCR.
     """
     shopping_list = ShoppingList.query.get_or_404(list_id)
-    if shopping_list.created_by != current_user.id:  # Tylko twórca może wgrywać paragony dla tej listy
+    if shopping_list.created_by != current_user.id:
         flash('Nie masz uprawnień do dodawania paragonów do tej listy.', 'danger')
         return redirect(url_for('main.dashboard'))
 
@@ -186,7 +218,7 @@ def upload_receipt_for_list(list_id):
         new_receipt = Receipt(
             user_id=current_user.id,
             file_path=file_path,
-            shopping_list_id=list_id,  # Powiąż paragon z listą zakupów!
+            shopping_list_id=list_id,
             status='Uploaded'
         )
         db.session.add(new_receipt)
@@ -194,11 +226,8 @@ def upload_receipt_for_list(list_id):
 
         flash('Paragon został wgrany i jest przetwarzany.', 'info')
 
-        # Uruchom OCR w tle (lub przekieruj na stronę oczekiwania)
-        # Na razie wywołujemy bezpośrednio. W prawdziwej aplikacji użyj Celery/RQ.
         process_receipt_image(new_receipt.id, file_path)
 
-        # Po przetworzeniu, przekieruj użytkownika na stronę przeglądu OCR
         return redirect(url_for('receipt.review_ocr_results', receipt_id=new_receipt.id))
     else:
         flash('Dozwolone typy plików to: png, jpg, jpeg, gif.', 'error')
@@ -234,7 +263,7 @@ def review_ocr_results(receipt_id):
             name = request.form.get(f'ocr_items[{i}][name]', '').strip()
             total_price_str = request.form.get(f'ocr_items[{i}][total_price]', '').strip()
 
-            if name:  # Dodawaj tylko elementy z nazwą
+            if name:
                 price_decimal = Decimal('0.00')
                 if total_price_str:
                     try:
@@ -244,21 +273,18 @@ def review_ocr_results(receipt_id):
                         price_decimal = Decimal('0.00')
 
                 corrected_ocr_items.append(
-                    {'name': name, 'total_price': str(price_decimal)})  # Zapisz jako string dla JSON
+                    {'name': name, 'total_price': str(price_decimal)})
             i += 1
 
-        # Zapisz skorygowane dane z powrotem do receipt.processed_data
         parsed_ocr_data['items'] = corrected_ocr_items
         receipt.set_processed_data(parsed_ocr_data)
         db.session.commit()
         flash('Korekty OCR zapisane.', 'success')
 
-        # Przejdź do scalania z listą zakupów
         return redirect(url_for('receipt.merge_ocr_with_list', receipt_id=receipt.id))
 
-    # Żądanie GET: Wyświetl formularz korekty
     return render_template(
-        'ocr/review_ocr_results.html',  # Nowy szablon
+        'ocr/review_ocr_results.html',
         receipt=receipt,
         ocr_items=parsed_ocr_data.get('items', [])
     )
@@ -270,102 +296,94 @@ def merge_ocr_with_list(receipt_id):
     """
     Scala dane z paragonu (po OCR) z produktami na powiązanej liście zakupów.
     """
-    print(f"DEBUG: Rozpoczynanie scalania dla paragonu ID: {receipt_id}")
+    app.logger.info(f"DEBUG: Rozpoczynanie scalania dla paragonu ID: {receipt_id}")
     receipt = Receipt.query.get_or_404(receipt_id)
     if receipt.user_id != current_user.id:
         flash('Nie masz uprawnień do scalania danych z tego paragonu.', 'danger')
-        print(
-            f"DEBUG: Błąd uprawnień dla paragonu ID: {receipt_id}. Użytkownik {current_user.id} nie jest właścicielem.")
+        app.logger.warning(f"DEBUG: Błąd uprawnień dla paragonu ID: {receipt_id}. Użytkownik {current_user.id} nie jest właścicielem.")
         return redirect(url_for('main.dashboard'))
 
     if not receipt.shopping_list_id:
         flash('Ten paragon nie jest powiązany z żadną listą zakupów. Najpierw go powiąż.', 'warning')
-        print(f"DEBUG: Paragon ID: {receipt_id} nie jest powiązany z listą zakupów.")
+        app.logger.warning(f"DEBUG: Paragon ID: {receipt_id} nie jest powiązany z listą zakupów.")
         return redirect(url_for('main.dashboard'))
 
     shopping_list = ShoppingList.query.get_or_404(receipt.shopping_list_id)
-    # Sprawdź, czy użytkownik jest twórcą lub uczestnikiem listy
     if shopping_list.created_by != current_user.id and current_user not in shopping_list.participants.all():
         flash('Nie masz uprawnień do modyfikowania tej listy zakupów.', 'danger')
-        print(
-            f"DEBUG: Błąd uprawnień dla listy zakupów ID: {shopping_list.id}. Użytkownik {current_user.id} nie jest twórcą ani uczestnikiem.")
+        app.logger.warning(f"DEBUG: Błąd uprawnień dla listy zakupów ID: {shopping_list.id}. Użytkownik {current_user.id} nie jest twórcą ani uczestnikiem.")
         return redirect(url_for('main.dashboard'))
 
     parsed_ocr_data = receipt.get_processed_data()
     if not parsed_ocr_data or "items" not in parsed_ocr_data:
         flash('Brak przetworzonych danych OCR do scalenia.', 'warning')
-        print(f"DEBUG: Brak przetworzonych danych OCR dla paragonu ID: {receipt_id}.")
+        app.logger.warning(f"DEBUG: Brak przetworzonych danych OCR dla paragonu ID: {receipt_id}.")
         return redirect(url_for('receipt.review_ocr_results', receipt_id=receipt.id))
 
-    print(f"DEBUG: Pobrano dane OCR: {parsed_ocr_data.get('items', [])}")
+    app.logger.debug(f"DEBUG: Pobrano dane OCR: {parsed_ocr_data.get('items', [])}")
 
-    # Przygotuj istniejące produkty z listy zakupów
     current_shopping_list_products = []
     for product in shopping_list.products:
         current_shopping_list_products.append({
             'name': product.name,
-            'price': product.price,  # Już Decimal
+            'price': product.price,
             'assigned_friends': [f.id for f in product.assigned_friends_for_product],
-            'paid_by': product.paid_by,  # Uwzględnij paid_by
-            'db_id': product.id  # Oryginalne ID z bazy danych
+            'paid_by': product.paid_by,
+            'db_id': product.id
         })
-    print(f"DEBUG: Pobrano istniejące produkty z listy: {current_shopping_list_products}")
+    app.logger.debug(f"DEBUG: Pobrano istniejące produkty z listy: {current_shopping_list_products}")
 
     try:
-        # Wywołaj algorytm scalania
         merged_products_data = match_ocr_to_shopping_list(
             shopping_list_items=current_shopping_list_products,
             parsed_ocr_items=parsed_ocr_data["items"]
         )
-        print(f"DEBUG: Wynik scalania z merging_services: {merged_products_data}")
+        app.logger.debug(f"DEBUG: Wynik scalania z merging_services: {merged_products_data}")
 
         # Usuń wszystkie obecne produkty i dodaj nowe, scalone.
-        print(f"DEBUG: Usuwanie istniejących produktów dla listy ID: {shopping_list.id}")
+        # WAŻNE: Tutaj dokonujemy usunięcia i ponownego dodania WSZYSTKICH produktów
+        # po scaleniu z OCR. Jeśli chcesz zachować istniejące i tylko dodawać nowe/aktualizować,
+        # potrzebna jest podobna logika jak w edit_shopping_list.
+        app.logger.info(f"DEBUG: Usuwanie istniejących produktów dla listy ID: {shopping_list.id} przed scaleniem.")
         Product.query.filter_by(shopping_list_id=shopping_list.id).delete()
-        db.session.commit()  # Zatwierdź usunięcie przed dodaniem nowych
-        print(f"DEBUG: Istniejące produkty usunięte. Dodawanie scalonych produktów.")
+        db.session.commit()
+        app.logger.info(f"DEBUG: Istniejące produkty usunięte. Dodawanie scalonych produktów.")
 
         for item_data in merged_products_data:
-            price_decimal = None
+            price_decimal = Decimal('0.00')
             if isinstance(item_data['price'], Decimal):
                 price_decimal = item_data['price']
             elif isinstance(item_data['price'], str) and item_data['price']:
                 try:
                     price_decimal = Decimal(item_data['price'])
                 except InvalidOperation:
-                    print(
-                        f"WARNING: Nie można przekonwertować ceny {item_data['price']} na Decimal dla {item_data['name']}. Ustawiam cenę na 0.00.")
+                    app.logger.warning(f"WARNING: Nie można przekonwertować ceny {item_data['price']} na Decimal dla {item_data['name']}. Ustawiam cenę na 0.00.")
                     price_decimal = Decimal('0.00')
-            else:
-                price_decimal = Decimal('0.00')
 
             new_product = Product(
                 name=item_data['name'],
                 price=price_decimal,
                 shopping_list_id=shopping_list.id,
                 paid_by=item_data.get('paid_by', current_user.id),
-                # Zachowaj oryginalne paid_by lub ustaw na current_user
-                is_purchased=False  # Zakładamy, że nowe/scalane elementy nie są jeszcze zakupione
+                is_purchased=False
             )
+            db.session.add(new_product)
+            db.session.flush() # Flush aby uzyskać ID dla nowego produktu
 
-            # Przypisz znajomych (jeśli byli przypisani w oryginalnej liście lub są nowi)
             if 'assigned_friends' in item_data and item_data['assigned_friends']:
                 for friend_id in item_data['assigned_friends']:
                     friend_obj = Friend.query.get(friend_id)
-                    if friend_obj and friend_obj.user_id == current_user.id:  # Sprawdź własność
+                    if friend_obj and friend_obj.user_id == current_user.id:
                         new_product.assigned_friends_for_product.append(friend_obj)
-
-            db.session.add(new_product)
 
         db.session.commit()
         flash(f'Produkty z paragonu zostały scalone z listą "{shopping_list.name}".', 'success')
-        print(f"DEBUG: Scalanie zakończone sukcesem dla listy ID: {shopping_list.id}. Przekierowanie do edycji listy.")
-        # Po scaleniu i zapisaniu, przekieruj z powrotem na stronę edycji listy, aby zobaczyć zmiany
+        app.logger.info(f"DEBUG: Scalanie zakończone sukcesem dla listy ID: {shopping_list.id}. Przekierowanie do edycji listy.")
         return redirect(url_for('receipt.edit_shopping_list', list_id=shopping_list.id))
     except Exception as e:
         db.session.rollback()
         flash(f'Wystąpił błąd podczas scalania produktów: {e}', 'danger')
-        print(f"ERROR: Błąd podczas scalania dla paragonu ID: {receipt_id}: {e}")
+        app.logger.exception(f"ERROR: Błąd podczas scalania dla paragonu ID: {receipt_id}")
         return redirect(url_for('receipt.review_ocr_results', receipt_id=receipt.id))
 
 
@@ -383,7 +401,7 @@ def delete_receipt(receipt_id):
     try:
         if receipt.file_path and os.path.exists(receipt.file_path):
             os.remove(receipt.file_path)
-            print(f"Usunięto fizyczny plik paragonu: {receipt.file_path}")
+            app.logger.info(f"Usunięto fizyczny plik paragonu: {receipt.file_path}")
 
         db.session.delete(receipt)
         db.session.commit()
@@ -391,6 +409,7 @@ def delete_receipt(receipt_id):
     except Exception as e:
         db.session.rollback()
         flash(f'Błąd podczas usuwania paragonu: {e}', 'danger')
+        app.logger.exception(f"Błąd podczas usuwania paragonu ID: {receipt_id}")
 
     if receipt.shopping_list_id:
         return redirect(url_for('receipt.edit_shopping_list', list_id=receipt.shopping_list_id))
@@ -416,12 +435,10 @@ def export_receipt_csv(receipt_id):
     output = io.StringIO()
     writer = csv.writer(output)
 
-    # Nagłówki CSV
     writer.writerow(["Nazwa Produktu", "Cena Całkowita", "Ilość", "Cena Jednostkowa", "Rabat"])
 
-    # Wiersze CSV
     for item in parsed_data.get('items', []):
-        name = item.get('name', '').replace('"', '""')  # Obsługa cudzysłowów w nazwach
+        name = item.get('name', '').replace('"', '""')
         total_price = item.get('total_price', '0.00')
         quantity = item.get('quantity', '')
         unit_price = item.get('unit_price', '')
@@ -432,4 +449,3 @@ def export_receipt_csv(receipt_id):
     response.headers["Content-Disposition"] = f"attachment; filename=paragon_{receipt.id}_export.csv"
     response.headers["Content-type"] = "text/csv"
     return response
-
