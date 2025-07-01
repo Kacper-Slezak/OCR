@@ -148,7 +148,6 @@ def settlement_history():
     return render_template('settlements/history.html', all_settlements=all_settlements)
 
 # Export transakcji
-
 @bp.route('/transakcje.csv')
 def eksportuj_transakcje_csv():
     """
