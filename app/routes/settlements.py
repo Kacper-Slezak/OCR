@@ -44,45 +44,8 @@ def get_settlement_stats():
     spending_per_list = {}
 
     try:
-        # 1. Obliczanie total_balance (całkowite saldo netto dla zalogowanego użytkownika)
-        # Suma należności (inni są winni Tobie) - Suma zobowiązań (Ty jesteś winien innym)
-        # Bierzemy pod uwagę rozliczenia, gdzie current_user jest wierzycielem/dłużnikiem
-        # ORAZ gdzie znajomy current_user jest wierzycielem/dłużnikiem.
-
-        # Saldo z rozliczeń, gdzie użytkownik jest stroną
-        user_creditor_sum = db.session.query(func.sum(Settlement.amount)).filter(
-            Settlement.creditor_user_id == user_id,
-            Settlement.is_settled == False
-        ).scalar() or Decimal('0.00')
-
-        user_debtor_sum = db.session.query(func.sum(Settlement.amount)).filter(
-            Settlement.debtor_user_id == user_id,
-            Settlement.is_settled == False
-        ).scalar() or Decimal('0.00')
-
-        # Saldo z rozliczeń, gdzie znajomy użytkownika jest stroną
-        # Sumujemy należności znajomych (dodatnie saldo dla użytkownika)
-        friend_creditor_sum = db.session.query(func.sum(Settlement.amount)).join(
-            Friend, Settlement.creditor_friend_id == Friend.id
-        ).filter(
-            Friend.user_id == user_id,
-            Settlement.is_settled == False
-        ).scalar() or Decimal('0.00')
-
-        # Sumujemy zobowiązania znajomych (ujemne saldo dla użytkownika)
-        friend_debtor_sum = db.session.query(func.sum(Settlement.amount)).join(
-            Friend, Settlement.debtor_friend_id == Friend.id
-        ).filter(
-            Friend.user_id == user_id,
-            Settlement.is_settled == False
-        ).scalar() or Decimal('0.00')
-
-        total_balance = (user_creditor_sum + friend_creditor_sum) - \
-                        (user_debtor_sum + friend_debtor_sum)
-
-        # 2. Szczegółowe nierozliczone transakcje
-        # Pobieramy wszystkie nierozliczone rozliczenia, w których użytkownik jest bezpośrednio stroną
-        # LUB gdzie znajomy użytkownika jest stroną
+        # 1. Obliczanie total_balance - uproszczona logika
+        # Pobieramy wszystkie nierozliczone rozliczenia związane z użytkownikiem
         unsettled_settlements = db.session.query(Settlement).filter(
             or_(
                 Settlement.debtor_user_id == user_id,
@@ -93,6 +56,22 @@ def get_settlement_stats():
             Settlement.is_settled == False
         ).all()
 
+        # Obliczamy saldo na podstawie pobranych rozliczeń
+        for settlement in unsettled_settlements:
+            # Sprawdzamy czy użytkownik jest wierzycielem (dostaje pieniądze)
+            is_user_creditor = (settlement.creditor_user_id == user_id) or \
+                               (settlement.creditor_friend_id and settlement.creditor_friend.user_id == user_id)
+
+            # Sprawdzamy czy użytkownik jest dłużnikiem (płaci)
+            is_user_debtor = (settlement.debtor_user_id == user_id) or \
+                             (settlement.debtor_friend_id and settlement.debtor_friend.user_id == user_id)
+
+            if is_user_creditor:
+                total_balance += settlement.amount
+            elif is_user_debtor:
+                total_balance -= settlement.amount
+
+        # 2. Szczegółowe nierozliczone transakcje
         for s in unsettled_settlements:
             debtor_name = "N/A"
             if s.debtor_user:
@@ -107,8 +86,6 @@ def get_settlement_stats():
                 creditor_name = s.creditor_friend.name
 
             # Określ typ transakcji z perspektywy zalogowanego użytkownika
-            # 'owes_you' jeśli ktoś (użytkownik lub jego znajomy) jest wierzycielem, a druga strona dłużnikiem
-            # 'you_owe' jeśli ktoś (użytkownik lub jego znajomy) jest dłużnikiem, a druga strona wierzycielem
             transaction_type = ''
             if (s.creditor_user_id == user_id) or (s.creditor_friend_id and s.creditor_friend.user_id == user_id):
                 transaction_type = 'owes_you'
@@ -125,8 +102,6 @@ def get_settlement_stats():
             })
 
         # 3. Wydatki na Listy Zakupów
-        # Sumujemy ceny wszystkich produktów na listach, w których użytkownik jest twórcą lub uczestnikiem
-
         # Pobierz ID wszystkich list, w których użytkownik jest twórcą lub uczestnikiem
         user_related_list_ids = db.session.query(ShoppingList.id).filter(
             or_(
@@ -139,19 +114,24 @@ def get_settlement_stats():
         spending_data = db.session.query(
             ShoppingList.name, func.sum(Product.price)
         ).join(Product, ShoppingList.id == Product.shopping_list_id).filter(
-            ShoppingList.id.in_(user_related_list_ids)
+            ShoppingList.id.in_(user_related_list_ids),
+            Product.price.isnot(None)  # Dodane sprawdzenie, żeby uniknąć problemów z NULL
         ).group_by(ShoppingList.name).all()
 
         for list_name, total_spent in spending_data:
             spending_per_list[list_name] = float(total_spent or 0.0)
 
+        # Debug info - możesz usunąć po naprawie
+        print(f"DEBUG: User {user_id} - Found {len(unsettled_settlements)} unsettled settlements")
+        print(f"DEBUG: Total balance calculated: {total_balance}")
+
     except Exception as e:
         print(f"Błąd podczas pobierania statystyk rozliczeń: {e}")
-        return jsonify({'error': 'Nie udało się pobrać statystyk rozliczeń'}, 500)
+        return jsonify({'error': 'Nie udało się pobrać statystyk rozliczeń'}), 500
 
     return jsonify({
         'total_balance': float(total_balance),
-        'unsettled_transactions': unsettled_transactions_data,  # Zmieniono nazwę klucza
+        'unsettled_transactions': unsettled_transactions_data,
         'spending_per_list': spending_per_list
     })
 
