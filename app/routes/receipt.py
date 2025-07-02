@@ -16,6 +16,32 @@ import csv  # For CSV export
 receipt_bp = Blueprint('receipt', __name__)
 
 
+def safe_assign_friends_to_product(product, friend_ids, current_user_id):
+    """
+    Bezpiecznie przypisuje znajomych do produktu, unikając duplikatów.
+    """
+    if not friend_ids:
+        return
+
+    # Deduplikacja
+    unique_friend_ids = list(set(friend_ids))
+
+    for friend_id in unique_friend_ids:
+        try:
+            friend = Friend.query.filter_by(
+                id=friend_id,
+                user_id=current_user_id
+            ).first()
+
+            if friend and friend not in product.assigned_friends_for_product:
+                product.assigned_friends_for_product.append(friend)
+                print(f"DEBUG: Przypisano znajomego {friend_id} do produktu {product.id}")
+
+        except Exception as e:
+            print(f"Błąd przypisywania znajomego {friend_id}: {e}")
+            continue
+
+
 # --- Trasy dotyczące List Zakupów ---
 
 @receipt_bp.route('/shopping-list/edit', defaults={'list_id': None}, methods=['GET', 'POST'])
@@ -74,28 +100,37 @@ def edit_shopping_list(list_id):
             i += 1
 
         # Usuń istniejące produkty dla tej listy przed dodaniem nowych z formularza
-        # To upraszcza aktualizacje, ale oznacza utratę historii produktów.
         if shopping_list.id:
-            Product.query.filter_by(shopping_list_id=shopping_list.id).delete()
-            db.session.flush()  # Upewnij się, że usunięcia są przetworzone przed dodaniem nowych produktów
+            try:
+                # POPRAWIONE USUWANIE - usuń relacje, potem produkty
+                products_to_delete = Product.query.filter_by(shopping_list_id=shopping_list.id).all()
+                for product in products_to_delete:
+                    product.assigned_friends_for_product.clear()
 
+                db.session.flush()  # Zatwierdź czyszczenie relacji
+                Product.query.filter_by(shopping_list_id=shopping_list.id).delete()
+                db.session.flush()  # Zatwierdź usunięcie produktów
+
+            except Exception as e:
+                print(f"Błąd podczas usuwania produktów: {e}")
+                db.session.rollback()
+                flash(f'Błąd podczas aktualizacji listy: {e}', 'danger')
+                return redirect(request.url)
+
+        # Dodaj nowe produkty
         for p_data in products_data:
             new_product = Product(
                 name=p_data['name'],
                 price=p_data['price'],
                 shopping_list_id=shopping_list.id,
-                paid_by=current_user.id,  # Zakładamy, że aktualny użytkownik płaci
+                paid_by=current_user.id,
                 is_purchased=False
             )
             db.session.add(new_product)
             db.session.flush()  # Flush, aby uzyskać ID produktu przed przypisaniem znajomych
 
-            # Przypisz znajomych - Upewnij się, że dodajesz tylko UNIKALNE ID znajomych
-            unique_friend_ids = set(p_data['assigned_friends_ids'])  # Użyj set dla unikalności
-            for friend_id in unique_friend_ids:
-                friend = Friend.query.get(friend_id)
-                if friend and friend.user_id == current_user.id:  # Upewnij się, że znajomy należy do użytkownika
-                    new_product.assigned_friends_for_product.append(friend)
+            # POPRAWIONE przypisywanie znajomych
+            safe_assign_friends_to_product(new_product, p_data['assigned_friends_ids'], current_user.id)
 
         try:
             db.session.commit()
@@ -272,165 +307,254 @@ def review_ocr_results(receipt_id):
 def merge_ocr_with_list(receipt_id):
     """
     Scala dane z paragonu (po OCR) z produktami na powiązanej liście zakupów.
+    POPRAWIONA WERSJA z lepszą obsługą błędów i transakcji.
     """
     print(f"DEBUG: Rozpoczynanie scalania dla paragonu ID: {receipt_id}")
+
+    # Sprawdzenia podstawowe
     receipt = Receipt.query.get_or_404(receipt_id)
     if receipt.user_id != current_user.id:
         flash('Nie masz uprawnień do scalania danych z tego paragonu.', 'danger')
-        print(
-            f"DEBUG: Błąd uprawnień dla paragonu ID: {receipt_id}. Użytkownik {current_user.id} nie jest właścicielem.")
         return redirect(url_for('main.dashboard'))
 
     if not receipt.shopping_list_id:
-        flash('Ten paragon nie jest powiązany z żadną listą zakupów. Najpierw go powiąż.', 'warning')
-        print(f"DEBUG: Paragon ID: {receipt_id} nie jest powiązany z listą zakupów.")
+        flash('Ten paragon nie jest powiązany z żadną listą zakupów.', 'warning')
         return redirect(url_for('main.dashboard'))
 
     shopping_list = ShoppingList.query.get_or_404(receipt.shopping_list_id)
-    # Sprawdź, czy użytkownik jest twórcą lub uczestnikiem listy
     if shopping_list.created_by != current_user.id and current_user not in shopping_list.participants.all():
         flash('Nie masz uprawnień do modyfikowania tej listy zakupów.', 'danger')
-        print(
-            f"DEBUG: Błąd uprawnień dla listy zakupów ID: {shopping_list.id}. Użytkownik {current_user.id} nie jest twórcą ani uczestnikiem.")
         return redirect(url_for('main.dashboard'))
 
+    # Sprawdzenie danych OCR
     parsed_ocr_data = receipt.get_processed_data()
-    if not parsed_ocr_data or "items" not in parsed_ocr_data:
+    if not parsed_ocr_data or "items" not in parsed_ocr_data or not parsed_ocr_data["items"]:
         flash('Brak przetworzonych danych OCR do scalenia.', 'warning')
-        print(f"DEBUG: Brak przetworzonych danych OCR dla paragonu ID: {receipt_id}.")
         return redirect(url_for('receipt.review_ocr_results', receipt_id=receipt.id))
 
-    print(f"DEBUG: Pobrano dane OCR: {parsed_ocr_data.get('items', [])}")
+    print(f"DEBUG: Pobrano {len(parsed_ocr_data['items'])} elementów z OCR")
 
-    # Przygotuj istniejące produkty z listy zakupów
+    # Przygotowanie danych istniejących produktów
     current_shopping_list_products = []
     for product in shopping_list.products:
         current_shopping_list_products.append({
             'name': product.name,
-            'price': product.price,  # Już Decimal
+            'price': product.price,
             'assigned_friends': [f.id for f in product.assigned_friends_for_product],
-            'paid_by': product.paid_by,  # Uwzględnij paid_by
-            'db_id': product.id  # Oryginalne ID z bazy danych
+            'paid_by': product.paid_by,
+            'db_id': product.id
         })
-    print(f"DEBUG: Pobrano istniejące produkty z listy: {current_shopping_list_products}")
+
+    print(f"DEBUG: Pobrano {len(current_shopping_list_products)} istniejących produktów")
 
     try:
-        # Wywołaj algorytm scalania
+        # Wywołanie algorytmu scalania
         merged_products_data = match_ocr_to_shopping_list(
             shopping_list_items=current_shopping_list_products,
             parsed_ocr_items=parsed_ocr_data["items"]
         )
-        print(f"DEBUG: Wynik scalania z merging_services: {merged_products_data}")
 
-        print(f"DEBUG: Usuwanie istniejących produktów i relacji dla listy ID: {shopping_list.id}")
+        # SPRAWDZENIE WYNIKÓW SCALANIA
+        if not merged_products_data:
+            flash('Algorytm scalania nie zwrócił żadnych produktów.', 'warning')
+            return redirect(url_for('receipt.review_ocr_results', receipt_id=receipt.id))
 
-        # 1. Najpierw znajdź wszystkie produkty z tej listy
-        products_to_delete = Product.query.filter_by(shopping_list_id=shopping_list.id).all()
-        product_ids_to_delete = [p.id for p in products_to_delete]
+        if not isinstance(merged_products_data, list):
+            flash('Algorytm scalania zwrócił nieprawidłowy format danych.', 'error')
+            return redirect(url_for('receipt.review_ocr_results', receipt_id=receipt.id))
 
-        # 2. Usuń relacje z product_friend_assignment dla tych produktów
-        if product_ids_to_delete:
-            from sqlalchemy import text
-            # Tworzymy placeholder dla każdego ID
-            placeholders = ','.join(['?' for _ in product_ids_to_delete])
-            db.session.execute(
-                text(f"DELETE FROM product_friend_assignment WHERE product_id IN ({placeholders})"),
-                product_ids_to_delete
-            )
-            print(f"DEBUG: Usunięto relacje dla produktów: {product_ids_to_delete}")
+        print(f"DEBUG: Algorytm scalania zwrócił {len(merged_products_data)} produktów")
 
-        # 3. Teraz usuń produkty
-        Product.query.filter_by(shopping_list_id=shopping_list.id).delete()
-        db.session.commit()  # Zatwierdź usunięcie przed dodaniem nowych
-        print(f"DEBUG: Istniejące produkty usunięte. Dodawanie scalonych produktów.")
+        # BEZPIECZNE USUWANIE STARYCH PRODUKTÓW
+        success = _safely_clear_shopping_list_products(shopping_list.id)
+        if not success:
+            flash('Błąd podczas usuwania starych produktów.', 'danger')
+            return redirect(url_for('receipt.review_ocr_results', receipt_id=receipt.id))
 
-        # 4. Opcjonalnie: wyczyść cache sesji SQLAlchemy
-        db.session.expunge_all()
+        # DODAWANIE NOWYCH PRODUKTÓW
+        success = _safely_add_merged_products(merged_products_data, shopping_list.id, current_user.id)
+        if not success:
+            flash('Błąd podczas dodawania nowych produktów.', 'danger')
+            return redirect(url_for('receipt.review_ocr_results', receipt_id=receipt.id))
 
-        for item_data in merged_products_data:
-            price_decimal = None
-            if isinstance(item_data['price'], Decimal):
-                price_decimal = item_data['price']
-            elif isinstance(item_data['price'], str) and item_data['price']:
-                try:
-                    price_decimal = Decimal(item_data['price'])
-                except InvalidOperation:
-                    print(
-                        f"WARNING: Nie można przekonwertować ceny {item_data['price']} na Decimal dla {item_data['name']}. Ustawiam cenę na 0.00.")
-                    price_decimal = Decimal('0.00')
-            else:
-                price_decimal = Decimal('0.00')
-
-            new_product = Product(
-                name=item_data['name'],
-                price=price_decimal,
-                shopping_list_id=shopping_list.id,
-                paid_by=item_data.get('paid_by', current_user.id),
-                # Zachowaj oryginalne paid_by lub ustaw na current_user
-                is_purchased=False  # Zakładamy, że nowe/scalane elementy nie są jeszcze zakupione
-            )
-
-            # Add product to session and flush to get the ID
-            db.session.add(new_product)
-            db.session.flush()  # This assigns an ID to new_product
-
-            # POPRAWKA: Bezpieczne przypisywanie znajomych z deduplikacją
-            if 'assigned_friends' in item_data and item_data['assigned_friends']:
-                # Ensure unique friend IDs and validate ownership
-                unique_assigned_friends = set(item_data['assigned_friends'])
-                print(f"DEBUG: Przypisywanie znajomych {unique_assigned_friends} do produktu {new_product.id}")
-
-                for friend_id in unique_assigned_friends:
-                    try:
-                        # Validate that friend_id is valid and belongs to current_user
-                        friend_obj = Friend.query.filter_by(
-                            id=friend_id,
-                            user_id=current_user.id
-                        ).first()
-
-                        if friend_obj:
-                            # Sprawdź czy relacja już istnieje w bazie danych
-                            from sqlalchemy import text
-                            existing_assignment = db.session.execute(
-                                text(
-                                    "SELECT 1 FROM product_friend_assignment WHERE product_id = :product_id AND friend_id = :friend_id"),
-                                {"product_id": new_product.id, "friend_id": friend_id}
-                            ).fetchone()
-
-                            if existing_assignment:
-                                print(
-                                    f"DEBUG: Relacja produkt {new_product.id} - znajomy {friend_id} już istnieje, pomijam")
-                                continue
-
-                            # Sprawdź też w sesji SQLAlchemy
-                            if friend_obj not in new_product.assigned_friends_for_product:
-                                new_product.assigned_friends_for_product.append(friend_obj)
-                                print(f"DEBUG: Dodano znajomego {friend_id} do produktu {new_product.id}")
-                            else:
-                                print(
-                                    f"DEBUG: Friend {friend_id} already assigned to product {new_product.id} in session")
-                        else:
-                            print(
-                                f"WARNING: Friend ID {friend_id} not found or doesn't belong to user {current_user.id}")
-
-                    except Exception as e:
-                        print(
-                            f"ERROR: Błąd podczas przypisywania znajomego {friend_id} do produktu {new_product.id}: {e}")
-                        # Kontynuuj z następnym znajomym zamiast przerywać cały proces
-                        continue
-
-        # Commit all changes at once
-        db.session.commit()
         flash(f'Produkty z paragonu zostały scalone z listą "{shopping_list.name}".', 'success')
-        print(f"DEBUG: Scalanie zakończone sukcesem dla listy ID: {shopping_list.id}. Przekierowanie do edycji listy.")
-
         return redirect(url_for('receipt.edit_shopping_list', list_id=shopping_list.id))
 
     except Exception as e:
+        print(f"ERROR: Błąd podczas scalania: {e}")
         db.session.rollback()
-        flash(f'Wystąpił błąd podczas scalania produktów: {e}', 'danger')
-        print(f"ERROR: Błąd podczas scalania dla paragonu ID: {receipt_id}: {e}")
+        flash(f'Wystąpił nieoczekiwany błąd podczas scalania: {str(e)}', 'danger')
         return redirect(url_for('receipt.review_ocr_results', receipt_id=receipt.id))
+
+
+def _safely_clear_shopping_list_products(shopping_list_id):
+    """
+    Bezpiecznie usuwa wszystkie produkty z listy zakupów.
+    Zwraca True jeśli sukces, False jeśli błąd.
+    """
+    try:
+        print(f"DEBUG: Rozpoczynanie usuwania produktów dla listy {shopping_list_id}")
+
+        # Pobierz wszystkie produkty
+        products_to_delete = Product.query.filter_by(shopping_list_id=shopping_list_id).all()
+        print(f"DEBUG: Znaleziono {len(products_to_delete)} produktów do usunięcia")
+
+        if not products_to_delete:
+            print("DEBUG: Brak produktów do usunięcia")
+            return True
+
+        # Wyczyść relacje many-to-many dla każdego produktu
+        for product in products_to_delete:
+            try:
+                # Sprawdź czy produkt ma relacje
+                friends_count = len(product.assigned_friends_for_product)
+                print(f"DEBUG: Produkt {product.id} ma {friends_count} przypisanych znajomych")
+
+                # Wyczyść relacje
+                product.assigned_friends_for_product.clear()
+
+            except Exception as e:
+                print(f"ERROR: Błąd czyszczenia relacji dla produktu {product.id}: {e}")
+                db.session.rollback()
+                return False
+
+        # Flush, aby zastosować zmiany w relacjach
+        db.session.flush()
+        print("DEBUG: Relacje wyczyszczone")
+
+        # Usuń produkty
+        deleted_count = Product.query.filter_by(shopping_list_id=shopping_list_id).delete()
+        print(f"DEBUG: Usunięto {deleted_count} produktów")
+
+        # Commit usunięć
+        db.session.commit()
+        print("DEBUG: Usuwanie produktów zakończone sukcesem")
+        return True
+
+    except Exception as e:
+        print(f"ERROR: Błąd podczas usuwania produktów: {e}")
+        db.session.rollback()
+        return False
+
+
+def _safely_add_merged_products(merged_products_data, shopping_list_id, current_user_id):
+    """
+    Bezpiecznie dodaje scalone produkty do listy zakupów.
+    Zwraca True jeśli sukces, False jeśli błąd.
+    """
+    try:
+        print(f"DEBUG: Rozpoczynanie dodawania {len(merged_products_data)} produktów")
+
+        for i, item_data in enumerate(merged_products_data):
+            print(f"DEBUG: Przetwarzanie produktu {i + 1}: {item_data}")
+
+            # Walidacja danych produktu
+            if not isinstance(item_data, dict):
+                print(f"ERROR: Produkt {i + 1} nie jest słownikiem: {type(item_data)}")
+                continue
+
+            if 'name' not in item_data or not item_data['name']:
+                print(f"ERROR: Produkt {i + 1} nie ma nazwy")
+                continue
+
+            # Konwersja ceny
+            price_decimal = _convert_price_to_decimal(item_data.get('price', '0.00'))
+
+            # Tworzenie produktu
+            new_product = Product(
+                name=str(item_data['name']).strip(),
+                price=price_decimal,
+                shopping_list_id=shopping_list_id,
+                paid_by=item_data.get('paid_by', current_user_id),
+                is_purchased=False
+            )
+
+            db.session.add(new_product)
+            db.session.flush()  # Uzyskaj ID produktu
+
+            print(f"DEBUG: Utworzono produkt {new_product.id}: {new_product.name}")
+
+            # Przypisywanie znajomych
+            assigned_friends = item_data.get('assigned_friends', [])
+            if assigned_friends:
+                success = _assign_friends_to_product(new_product, assigned_friends, current_user_id)
+                if not success:
+                    print(f"WARNING: Błąd przypisywania znajomych do produktu {new_product.id}")
+
+        # Commit wszystkich zmian
+        db.session.commit()
+        print("DEBUG: Dodawanie produktów zakończone sukcesem")
+        return True
+
+    except Exception as e:
+        print(f"ERROR: Błąd podczas dodawania produktów: {e}")
+        db.session.rollback()
+        return False
+
+
+def _convert_price_to_decimal(price_value):
+    """
+    Bezpiecznie konwertuje cenę na Decimal.
+    """
+    if isinstance(price_value, Decimal):
+        return price_value
+
+    if price_value is None:
+        return Decimal('0.00')
+
+    try:
+        # Konwertuj na string i zamień przecinek na kropkę
+        price_str = str(price_value).replace(',', '.').strip()
+        if not price_str:
+            return Decimal('0.00')
+        return Decimal(price_str)
+    except (InvalidOperation, ValueError) as e:
+        print(f"WARNING: Nie można przekonwertować ceny '{price_value}' na Decimal: {e}")
+        return Decimal('0.00')
+
+
+def _assign_friends_to_product(product, friend_ids, current_user_id):
+    """
+    Bezpiecznie przypisuje znajomych do produktu.
+    """
+    try:
+        if not friend_ids:
+            return True
+
+        # Walidacja i deduplikacja
+        valid_friend_ids = []
+        for friend_id in friend_ids:
+            try:
+                friend_id_int = int(friend_id)
+                if friend_id_int not in valid_friend_ids:
+                    valid_friend_ids.append(friend_id_int)
+            except (ValueError, TypeError):
+                print(f"WARNING: Nieprawidłowe ID znajomego: {friend_id}")
+                continue
+
+        # Przypisywanie znajomych
+        for friend_id in valid_friend_ids:
+            friend = Friend.query.filter_by(
+                id=friend_id,
+                user_id=current_user_id
+            ).first()
+
+            if friend:
+                # Sprawdź czy znajomy nie jest już przypisany
+                if friend not in product.assigned_friends_for_product:
+                    product.assigned_friends_for_product.append(friend)
+                    print(f"DEBUG: Przypisano znajomego {friend_id} do produktu {product.id}")
+                else:
+                    print(f"DEBUG: Znajomy {friend_id} już przypisany do produktu {product.id}")
+            else:
+                print(f"WARNING: Nie znaleziono znajomego o ID {friend_id} dla użytkownika {current_user_id}")
+
+        return True
+
+    except Exception as e:
+        print(f"ERROR: Błąd przypisywania znajomych: {e}")
+        return False
+
 
 @receipt_bp.route('/receipt/delete/<int:receipt_id>', methods=['POST'])
 @login_required
@@ -495,4 +619,3 @@ def export_receipt_csv(receipt_id):
     response.headers["Content-Disposition"] = f"attachment; filename=paragon_{receipt.id}_export.csv"
     response.headers["Content-type"] = "text/csv"
     return response
-
