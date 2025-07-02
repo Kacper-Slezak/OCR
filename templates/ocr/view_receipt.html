@@ -16,7 +16,6 @@
     {% endif %}
 
     <h2>Processed Data</h2>
-    {# Sprawdź, czy parsed_data istnieje i jest słownikiem, aby tojson działał poprawnie #}
     {% if parsed_data %}
         <pre>{{ parsed_data | tojson(indent=2) }}</pre>
     {% else %}
