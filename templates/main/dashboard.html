@@ -61,7 +61,9 @@
                                             {% endif %}
                                         </td>
                                         <td>
+                                            {% if not list.is_fully_settled %}
                                             <a href="{{ url_for('receipt.edit_shopping_list', list_id=list.id) }}" class="btn btn-sm btn-info me-2">Edytuj</a>
+                                            {% endif %}
                                             <form action="{{ url_for('receipt.delete_shopping_list', list_id=list.id) }}" method="POST" style="display:inline;">
                                                 <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Czy na pewno chcesz usunąć tę listę?');">Usuń</button>
                                             </form>
