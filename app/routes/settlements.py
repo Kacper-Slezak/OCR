@@ -375,7 +375,7 @@ def eksportuj_transakcje_csv():
     """
     # Nagłówki kolumn
     naglowki = ['ID', 'ID listy', 'ID dluznika', 'ID wierzyciela',
-                'Kwota', 'Utworzono', 'Rozliczono', 'Status']
+                'Kwota', 'Utworzono', 'Rozliczono']
 
     # Przygotowanie bufora CSV
     bufor = StringIO()
@@ -385,15 +385,18 @@ def eksportuj_transakcje_csv():
     # Pobieramy wszystkie transakcje
     transakcje = Settlement.query.all()
     for t in transakcje:
+        if t.settled_at:
+            rozliczono = t.settled_at.strftime('%Y-%m-%d %H:%M:%S')
+        else:
+            rozliczono = 'nie'
         writer.writerow([
             t.id,
             t.shopping_list_id,
-            t.debtor_id,
-            t.creditor_id,
+            t.debtor_friend_id,
+            t.creditor_friend_id,
             f"{t.amount:.2f}",
             t.created_at.strftime('%Y-%m-%d %H:%M:%S'),
-            t.settled_at.strftime('%Y-%m-%d %H:%M:%S') if t.settled_at else '',
-            'tak' if t.is_settled else 'nie'
+            rozliczono,
         ])
 
     # Tworzymy odpowiedź
