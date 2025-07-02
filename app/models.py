@@ -123,15 +123,10 @@ class Product(db.Model):
 class Settlement(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     shopping_list_id = db.Column(db.Integer, db.ForeignKey('shopping_list.id'), nullable=False)
-
-    # Nowe kolumny dla dłużnika (User lub Friend)
     debtor_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     debtor_friend_id = db.Column(db.Integer, db.ForeignKey('friend.id'), nullable=True)
-
-    # Nowe kolumny dla wierzyciela (User lub Friend)
     creditor_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     creditor_friend_id = db.Column(db.Integer, db.ForeignKey('friend.id'), nullable=True)
-
     amount = db.Column(db.Numeric(10, 2), nullable=False)
     is_settled = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.now)

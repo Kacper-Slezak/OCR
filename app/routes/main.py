@@ -5,9 +5,7 @@ from app import db
 from app.models import ShoppingList, Friend, Product, Settlement, User  # Dodano User do importów
 from datetime import datetime
 from sqlalchemy.exc import IntegrityError
-
-# POPRAWKA: Upewnij się, że importujesz obie funkcje z settlement_service
-from app.services.settlements_services import calculate_settlements, check_and_update_list_settlement_status
+from app.services.settlements_services import calculate_settlements
 
 bp = Blueprint('main', __name__)
 
@@ -50,13 +48,11 @@ def dashboard():
             if friend_to_remove:
                 try:
                     # Usuwanie powiązań z produktami
-                    # Zmiana: iteruj po kopii, aby uniknąć błędu RuntimeError: dictionary changed size during iteration
                     for product in list(friend_to_remove.assigned_products):
                         if friend_to_remove in product.assigned_friends_for_product:
                             product.assigned_friends_for_product.remove(friend_to_remove)
 
                     # Usuwanie powiązań z rozliczeniami, gdzie znajomy jest dłużnikiem
-                    # Zmiana: .all() jest poprawne dla dynamicznych relacji
                     if hasattr(friend_to_remove, 'debtor_settlements_friend'):
                         for settlement in friend_to_remove.debtor_settlements_friend.all():
                             db.session.delete(settlement)
@@ -81,11 +77,6 @@ def dashboard():
             # Ważne: Zawsze przekieruj po operacji POST
             return redirect(url_for('main.dashboard'))
 
-        # --- NOWA LOGIKA: Obsługa formularza zapisu listy zakupów ---
-        # Ta sekcja jest dla edycji/tworzenia listy, która powinna być w 'receipt_bp'
-        # Jeśli ten kod jest w 'main.py' i chcesz go tu zachować, upewnij się, że jest poprawny.
-        # Wcześniejsze dyskusje sugerowały przeniesienie tej logiki do 'receipt_bp'.
-        # Na potrzeby tego zadania, nie zmieniam tej logiki, tylko dodaję nową trasę.
         if 'list_name' in request.form and any(key.startswith('products[') for key in request.form):
             try:
                 list_id = request.form.get('list_id')
@@ -140,7 +131,7 @@ def dashboard():
                     try:
                         product_price = Decimal(product_price_str.replace(',', '.'))
                     except Exception:
-                        product_price = Decimal('0.00')  # Domyślna wartość w przypadku błędu
+                        product_price = Decimal('0.00')
 
                     products_data.append({
                         'name': product_name,
@@ -154,7 +145,7 @@ def dashboard():
                             name=product_data['name'],
                             price=product_data['price'],
                             shopping_list_id=shopping_list.id,
-                            paid_by=current_user.id  # POPRAWKA: Ustawienie kto zapłacił za produkt
+                            paid_by=current_user.id
                         )
                         db.session.add(new_product)
 
@@ -175,7 +166,6 @@ def dashboard():
 
             return redirect(url_for('main.dashboard'))
 
-    # --- Logika dla żądań GET (wyświetlanie dashboardu) ---
     # Pobieramy listy zakupów, w których użytkownik jest twórcą LUB uczestnikiem.
     my_shopping_lists_as_participant = ShoppingList.query \
         .join(ShoppingList.participants) \
@@ -209,23 +199,21 @@ def calculate_all_unsettled_lists():
     unsettled_lists = ShoppingList.query.filter(
         (ShoppingList.created_by == user_id) |
         ShoppingList.participants.any(User.id == user_id),
-        ShoppingList.is_fully_settled == False  # Tylko te, które nie są w pełni rozliczone
+        ShoppingList.is_fully_settled == False
     ).all()
 
     if not unsettled_lists:
         flash('Brak list oczekujących na rozliczenie.', 'info')
-        # POPRAWKA: Przekierowanie na dashboard rozliczeń
+
         return redirect(url_for('settlements.settlements_dashboard'))
 
     for shopping_list in unsettled_lists:
         try:
-            # Wyczyść istniejące rozliczenia dla tej listy przed ponownym przeliczeniem
-            # WAŻNE: To usunie WSZYSTKIE rozliczenia dla listy, niezależnie od statusu.
-            # Jeśli chcesz zachować historię, potrzebna jest bardziej złożona strategia.
             Settlement.query.filter_by(shopping_list_id=shopping_list.id).delete()
             db.session.commit()  # Zatwierdź usunięcie przed generowaniem nowych
-
-            calculate_settlements(shopping_list.id)  # Wywołaj algorytm dla każdej listy
+            calculate_settlements(shopping_list.id)
+            if shopping_list:
+                shopping_list.is_fully_settled = True
             processed_count += 1
         except Exception as e:
             db.session.rollback()

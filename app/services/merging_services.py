@@ -88,7 +88,7 @@ def match_ocr_to_shopping_list(shopping_list_items, parsed_ocr_items):
                 })
 
     final_shopping_list = []
-    threshold = 0.65  # Próg podobieństwa trigramów (możesz dostosować)
+    threshold = 0.45  # Próg podobieństwa trigramów (możesz dostosować)
 
     # 1. Dopasowanie elementów listy zakupów do elementów z OCR
     for s_item in shopping_list_items:

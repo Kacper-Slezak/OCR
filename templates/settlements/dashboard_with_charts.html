@@ -67,8 +67,9 @@
     </div>
 
     <p class="text-center mt-8">
-        <a href="{{ url_for('settlements.settlement_history') }}" class="btn bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition duration-150">Zobacz historię wszystkich rozliczeń (również opłaconych)</a>
-    </p>
+        <a href="{{ url_for('settlements.settlement_history') }}" class="btn btn-secondary me-2">
+  Przejdź do historii rozliczeń
+</a>
       <a href="{{ url_for('settlements.eksportuj_transakcje_csv') }}" class="btn btn-primary">
     Pobierz transakcje w CSV
 </a>
@@ -372,8 +373,7 @@
       const li = document.createElement('li');
       li.classList.add('list-group-item', 'd-flex', 'justify-content-between', 'align-items-center');
 
-      let description = '';
-      let amountClass = '';
+
 
       if (transaction.type === 'owes_you') {
         description = `<strong>${transaction.debtor_name}</strong> jest winien <strong>${transaction.creditor_name}</strong>`;

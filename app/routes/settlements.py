@@ -40,7 +40,7 @@ def get_settlement_stats():
     user_id = current_user.id
 
     total_balance = Decimal('0.00')
-    unsettled_transactions_data = []  # Zmieniono nazwę z 'balances' na 'unsettled_transactions_data'
+    unsettled_transactions_data = []
     spending_per_list = {}
 
     try:

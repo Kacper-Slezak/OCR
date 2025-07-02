@@ -10,7 +10,6 @@
                     Paragon #{{ receipt.id }} - Status: {{ receipt.status }} - Data: {{ receipt.upload_date.strftime('%Y-%m-%d') }}
                     <a href="{{ url_for('ocr.edit_receipt', receipt_id=receipt.id) }}">Edytuj</a>
                     <a class="btn btn-sm btn-outline-primary" href="{{ url_for('ocr.export_receipt', receipt_id=receipt.id) }}">Eksportuj CSV</a>
-                    {# Opcjonalnie: formularz do usuwania #}
                     <form action="{{ url_for('ocr.delete_receipt', receipt_id=receipt.id) }}" method="POST" style="display:inline;">
                         <button type="submit" onclick="return confirm('Czy na pewno chcesz usunąć ten paragon?');">Usuń</button>
                     </form>

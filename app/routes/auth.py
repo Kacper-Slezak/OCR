@@ -1,6 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 from flask_mail import Message
-from werkzeug.security import check_password_hash, generate_password_hash
 from flask_login import login_user, logout_user, login_required, current_user
 
 from app import mail, db
@@ -9,7 +8,7 @@ from app.forms import LoginForm, RegistrationForm, PasswordResetRequestForm, Pas
 from app.services.token_utils import generate_confirmation_token, confirm_token
 from app.services.notifications_services import wyslij_email
 
-# Przywrócenie poprzedniej konwencji: nazwa blueprintu jako bp
+
 bp = Blueprint(
     'auth', __name__, url_prefix='/auth', template_folder='templates/auth'
 )

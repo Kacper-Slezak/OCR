@@ -1,10 +1,10 @@
 # app/routes/receipt.py
 
-from flask import render_template, Blueprint, redirect, url_for, flash, request, current_app as app, send_file, \
-    make_response, abort
+from flask import render_template, Blueprint, redirect, url_for, flash, request, current_app as app, \
+    make_response
 from flask_login import login_required, current_user
 from app import db
-from app.models import ShoppingList, Product, Receipt, Friend, User  # Ensure User is imported for participants
+from app.models import ShoppingList, Product, Receipt, Friend  # Ensure User is imported for participants
 from app.services.ocr_services import process_receipt_image  # Your existing OCR service
 from app.services.merging_services import match_ocr_to_shopping_list  # Renamed from ocr_matching_service
 from decimal import Decimal, InvalidOperation
@@ -102,7 +102,6 @@ def edit_shopping_list(list_id):
         # Usuń istniejące produkty dla tej listy przed dodaniem nowych z formularza
         if shopping_list.id:
             try:
-                # POPRAWIONE USUWANIE - usuń relacje, potem produkty
                 products_to_delete = Product.query.filter_by(shopping_list_id=shopping_list.id).all()
                 for product in products_to_delete:
                     product.assigned_friends_for_product.clear()
@@ -129,7 +128,6 @@ def edit_shopping_list(list_id):
             db.session.add(new_product)
             db.session.flush()  # Flush, aby uzyskać ID produktu przed przypisaniem znajomych
 
-            # POPRAWIONE przypisywanie znajomych
             safe_assign_friends_to_product(new_product, p_data['assigned_friends_ids'], current_user.id)
 
         try:

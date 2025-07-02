@@ -2,8 +2,6 @@ from flask_wtf import FlaskForm
 from pyexpat.errors import messages
 from wtforms import StringField, PasswordField, SubmitField, BooleanField
 from wtforms.validators import DataRequired, Length, Email, EqualTo, ValidationError
-
-# Poprawka: Poprawny import User z pakietu app
 from app.models import User
 
 class RegistrationForm(FlaskForm):

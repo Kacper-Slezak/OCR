@@ -4,36 +4,21 @@
 
 {% block content %}
     <style>
-        /* Styling for the friend input group */
-        .friend-input-group {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-        }
         .friend-input-group .form-control {
             flex-grow: 1;
         }
-        /* Styling for action buttons in the friends table */
+
         .friend-actions {
-            white-space: nowrap; /* Prevents line breaks for the button */
+            white-space: nowrap;
         }
-        /* Additional styling for better spacing between sections */
         .card {
-            height: 100%; /* Ensures cards have the same height in columns */
+            height: 100%;
             display: flex;
             flex-direction: column;
         }
         .card-body-scroll {
             flex-grow: 1;
-            overflow-y: auto; /* Adds a scrollbar if content is too long */
-        }
-        /* Custom button style for purple button */
-        .btn-purple {
-            background-color: #8a2be2; /* Adjust to your preferred purple shade */
-            color: white;
-        }
-        .btn-purple:hover {
-            background-color: #6a1ba0; /* Darker shade on hover */
+            overflow-y: auto;
         }
     </style>
 
@@ -41,15 +26,11 @@
 
     <div class="container-fluid">
         <div class="row">
-            <!-- Left column: Shopping Lists (takes 8/12 width) -->
             <div class="col-lg-8 mb-4">
                 <div class="card shadow-sm p-4 mb-4">
                     <h2 class="h4 mb-3">Twoje Listy Zakupów</h2>
-                    {# POPRAWKA: Zmieniono 'receipt.lists_edition' na 'receipt.edit_shopping_list' #}
                     <a href="{{ url_for('receipt.edit_shopping_list') }}" class="btn btn-primary mb-3">Stwórz Nową Listę</a>
 
-                    {# Przycisk do obliczania rozliczeń dla wszystkich list #}
-                    {# POPRAWKA: Action już jest poprawnie na main.calculate_all_unsettled_lists #}
                     <form action="{{ url_for('main.calculate_all_unsettled_lists') }}" method="POST" style="display:inline-block; width: 100%;">
                         <button type="submit" class="btn btn-warning mb-3 w-100" onclick="return confirm('Czy na pewno chcesz przeliczyć rozrachunki dla WSZYSTKICH nierozliczonych list? Istniejące rozliczenia dla tych list zostaną usunięte.');">
                             Przelicz Rozrachunki dla Nierozliczonych List
@@ -80,7 +61,6 @@
                                             {% endif %}
                                         </td>
                                         <td>
-                                            {# POPRAWKA: Zmieniono 'receipt.lists_edition' na 'receipt.edit_shopping_list' #}
                                             <a href="{{ url_for('receipt.edit_shopping_list', list_id=list.id) }}" class="btn btn-sm btn-info me-2">Edytuj</a>
                                             <form action="{{ url_for('receipt.delete_shopping_list', list_id=list.id) }}" method="POST" style="display:inline;">
                                                 <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Czy na pewno chcesz usunąć tę listę?');">Usuń</button>
@@ -99,7 +79,6 @@
                 </div>
             </div>
 
-            <!-- Right column: Friends (takes 4/12 width) -->
             <div class="col-lg-4 mb-4">
                 <div class="card shadow-sm p-4">
                     <h2 class="h4 mb-3">Twoi Znajomi</h2>
@@ -137,10 +116,5 @@
     </div>
 {% endblock %}
 
-{# WAŻNE: USUŃ CAŁY POPRZEDNI BLOK {% block scripts %} Z LOKALNĄ LOGIKĄ JAVASCRIPT #}
-{# Ta sekcja {% block scripts %} poniżej jest celowo pusta/usunięta,
-   ponieważ logika zarządzania znajomymi została przeniesiona do Flaska.
-   Upewnij się, że Twój plik nie zawiera już starego JS z localStorage. #}
 {% block scripts %}
-    {# Upewnij się, że nie ma tu żadnego kodu JS związanego z localStorage dla znajomych #}
 {% endblock %}
