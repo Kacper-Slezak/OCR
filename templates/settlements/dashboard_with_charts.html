@@ -68,11 +68,11 @@
 
     <p class="text-center mt-8">
         <a href="{{ url_for('settlements.settlement_history') }}" class="btn btn-secondary me-2">
-  Przejdź do historii rozliczeń
-</a>
+          Przejdź do historii rozliczeń
+        </a>
       <a href="{{ url_for('settlements.eksportuj_transakcje_csv') }}" class="btn btn-primary">
-    Pobierz transakcje w CSV
-</a>
+        Pobierz transakcje w CSV
+    </a>
   </div>
 </div>
 
@@ -81,16 +81,14 @@
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-  console.log('Script started: dashboard_with_charts.html'); // Debug log
+  console.log('Script started: dashboard_with_charts.html');
 
-  // Global variables to store fetched data
   let settlementStats = {};
   let settlementActivity = {};
   let settlementTrends = {};
 
-  // Function to calculate and display main balance
   function calculateMainBalance() {
-    console.log('calculateMainBalance called'); // Debug log
+    console.log('calculateMainBalance called');
     const mainBalanceEl = document.getElementById("mainBalance");
     const mainBalanceCard = document.getElementById("mainBalanceCard");
     const descriptionEl = document.getElementById("balanceDescription");
@@ -124,9 +122,8 @@
     }
   }
 
-  // Create Balance Trend Chart
   function createBalanceTrendChart() {
-    console.log('createBalanceTrendChart called'); // Debug log
+    console.log('createBalanceTrendChart called');
     const ctx = document.getElementById("balanceTrendChart").getContext("2d");
     const noDataEl = document.getElementById("balanceTrendChartNoData");
 
@@ -207,9 +204,8 @@
     });
   }
 
-  // Create Activity Chart (number of settlements per month)
   function createActivityChart() {
-    console.log('createActivityChart called'); // Debug log
+    console.log('createActivityChart called');
     const ctx = document.getElementById("activityChart").getContext("2d");
     const noDataEl = document.getElementById("activityChartNoData");
 
@@ -273,9 +269,8 @@
     });
   }
 
-  // Create Spending Per List Chart
   function createSpendingPerListChart() {
-    console.log('createSpendingPerListChart called'); // Debug log
+    console.log('createSpendingPerListChart called');
     const ctx = document.getElementById("spendingPerListChart").getContext("2d");
     const noDataEl = document.getElementById("spendingPerListChartNoData");
 
@@ -353,11 +348,10 @@
   }
 
 
-  // Display all unsettled transactions
   function displayUnsettledTransactions() {
-    console.log('displayUnsettledTransactions called'); // Debug log
+    console.log('displayUnsettledTransactions called');
     const transactionsEl = document.getElementById("unsettledTransactionsList");
-    transactionsEl.innerHTML = ''; // Clear loading message
+    transactionsEl.innerHTML = '';
 
     const transactions = settlementStats.unsettled_transactions;
 
@@ -401,7 +395,6 @@
   }
 
 
-  // Fetch all data and render charts
   async function fetchDataAndRenderCharts() {
     console.log('fetchDataAndRenderCharts started'); // Debug log
     try {
@@ -411,7 +404,6 @@
         fetch('/settlements/api/settlement-trends')
       ]);
 
-      // Check if responses are OK before parsing JSON
       if (!statsResponse.ok) {
         console.error('API Stats fetch failed:', statsResponse.status, statsResponse.statusText);
         throw new Error('Failed to fetch settlement stats');
@@ -429,9 +421,9 @@
       settlementActivity = await activityResponse.json();
       settlementTrends = await trendsResponse.json();
 
-      console.log('Fetched Stats:', settlementStats); // Debug log
-      console.log('Fetched Activity:', settlementActivity); // Debug log
-      console.log('Fetched Trends:', settlementTrends); // Debug log
+      console.log('Fetched Stats:', settlementStats);
+      console.log('Fetched Activity:', settlementActivity);
+      console.log('Fetched Trends:', settlementTrends);
 
       if (settlementStats.error) {
         console.error("Error from API Stats:", settlementStats.error);
@@ -462,9 +454,8 @@
     }
   }
 
-  // Initial data fetch and chart rendering
   document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOMContentLoaded event fired'); // Debug log
+    console.log('DOMContentLoaded event fired');
     fetchDataAndRenderCharts();
   });
 </script>
