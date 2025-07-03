@@ -10,6 +10,10 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import os
 import atexit
 from datetime import datetime
+import logging
+
+logging.basicConfig()
+logging.getLogger('apscheduler').setLevel(logging.DEBUG)
 
 # Utwórz instancje rozszerzeń poza funkcją, aby były dostępne globalnie
 db = SQLAlchemy()
@@ -58,6 +62,36 @@ def create_app():
     login_manager.login_message_category = 'info'
     login_manager.login_message = 'Wymagane logowanie, aby korzystać ze strony.'
 
+        # только в основном (не-первом «загружающем») процессе
+    if os.environ.get('WERKZEUG_RUN_MAIN') == 'true' or not app.debug:
+        # регистрируем и стартуем APScheduler здесь
+        from app.services.notifications_services import wyslij_przypomnienia_dluznikom
+
+        def job_wrapper():
+            print(">>> [job_wrapper] start", flush=True)
+            with app.app_context():
+                try:
+                    print(">>> [job_wrapper] calling notify", flush=True)
+                    wyslij_przypomnienia_dluznikom()
+                    print(">>> [job_wrapper] returned notify", flush=True)
+                except Exception as e:
+                    print("!!! [job_wrapper] exception:", e, flush=True)
+            print(">>> [job_wrapper] end", flush=True)
+
+        scheduler.add_job(
+            func=job_wrapper,
+            trigger='interval',
+            seconds=10,
+            next_run_time=datetime.utcnow(),
+            id='przypomnienia_dluznikom',
+            replace_existing=True,
+            misfire_grace_time=30
+        )
+        print(">>> APScheduler jobs:", scheduler.get_jobs(), flush=True)
+        scheduler.start()
+        atexit.register(lambda: scheduler.shutdown(wait=False))
+
+
     # Importowanie blueprints
     from .routes import auth
 
@@ -78,16 +112,6 @@ def create_app():
     app.register_blueprint(notifications_bp)
 
     # Harmonogram wysyłania wiadomości przypomniających
-    from app.services.notifications_services import wyslij_przypomnienia_dluznikom
-    scheduler.add_job(
-        func=wyslij_przypomnienia_dluznikom,
-        trigger='interval',
-        days=7,
-        next_run_time=datetime.utcnow(),
-        id='przypomnienia_dluznikom'
-    )
-    scheduler.start()
-
 
     # Funkcja user_loader dla Flask-Login
     @login_manager.user_loader
