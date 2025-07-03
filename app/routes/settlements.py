@@ -1,4 +1,3 @@
-# app/routes/settlements.py
 from datetime import datetime
 from flask import Blueprint, render_template, redirect, url_for, flash, make_response
 from decimal import Decimal
@@ -44,7 +43,7 @@ def get_settlement_stats():
     spending_per_list = {}
 
     try:
-        # 1. Obliczanie total_balance - uproszczona logika
+        # 1. Obliczanie total_balance
         # Pobieramy wszystkie nierozliczone rozliczenia związane z użytkownikiem
         unsettled_settlements = db.session.query(Settlement).filter(
             or_(
@@ -85,7 +84,7 @@ def get_settlement_stats():
             elif s.creditor_friend:
                 creditor_name = s.creditor_friend.name
 
-            # Określ typ transakcji z perspektywy zalogowanego użytkownika
+            # Określamy typ transakcji z perspektywy zalogowanego użytkownika
             transaction_type = ''
             if (s.creditor_user_id == user_id) or (s.creditor_friend_id and s.creditor_friend.user_id == user_id):
                 transaction_type = 'owes_you'
@@ -102,7 +101,7 @@ def get_settlement_stats():
             })
 
         # 3. Wydatki na Listy Zakupów
-        # Pobierz ID wszystkich list, w których użytkownik jest twórcą lub uczestnikiem
+        # Pobieramy ID wszystkich list, w których użytkownik jest twórcą lub uczestnikiem
         user_related_list_ids = db.session.query(ShoppingList.id).filter(
             or_(
                 ShoppingList.created_by == user_id,
@@ -110,18 +109,17 @@ def get_settlement_stats():
             )
         ).subquery()
 
-        # Sumuj ceny produktów tylko z tych list
+        # Sumujemy ceny produktów tylko z tych list
         spending_data = db.session.query(
             ShoppingList.name, func.sum(Product.price)
         ).join(Product, ShoppingList.id == Product.shopping_list_id).filter(
             ShoppingList.id.in_(user_related_list_ids),
-            Product.price.isnot(None)  # Dodane sprawdzenie, żeby uniknąć problemów z NULL
+            Product.price.isnot(None)  # Sprawdzenie, żeby uniknąć problemów z NULL
         ).group_by(ShoppingList.name).all()
 
         for list_name, total_spent in spending_data:
             spending_per_list[list_name] = float(total_spent or 0.0)
 
-        # Debug info - możesz usunąć po naprawie
         print(f"DEBUG: User {user_id} - Found {len(unsettled_settlements)} unsettled settlements")
         print(f"DEBUG: Total balance calculated: {total_balance}")
 
@@ -191,7 +189,7 @@ def get_settlement_trends():
     trends_data = []
 
     try:
-        # Pobierz wszystkie rozliczenia dla danego użytkownika (lub jego znajomych), posortowane chronologicznie
+        # Pobieramy wszystkie rozliczenia dla danego użytkownika (lub jego znajomych), posortowane chronologicznie
         all_settlements = db.session.query(Settlement).filter(
             or_(
                 (Settlement.creditor_user_id == user_id),
@@ -209,7 +207,7 @@ def get_settlement_trends():
         weekly_balances = defaultdict(Decimal)
 
         for settlement in all_settlements:
-            # Określ, czy rozliczenie wpływa na saldo zalogowanego użytkownika
+            # Określamy, czy rozliczenie wpływa na saldo zalogowanego użytkownika
             # Użytkownik jest wierzycielem LUB znajomy użytkownika jest wierzycielem
             is_user_or_friend_creditor = (settlement.creditor_user_id == user_id) or \
                                          (
@@ -272,7 +270,7 @@ def calculate_list_settlements(list_id):
         flash('Nie masz uprawnień do obliczania rozliczeń dla tej listy.', 'error')
         return redirect(url_for('settlements.settlements_dashboard'))
 
-    # Wyczyść istniejące rozliczenia dla tej listy przed ponownym przeliczeniem
+    # Czyścimy istniejące rozliczenia dla tej listy przed ponownym przeliczeniem
     Settlement.query.filter_by(shopping_list_id=list_id).delete()
     db.session.commit()
 
@@ -295,11 +293,11 @@ def settle_single_transaction(settlement_id):
     """
     settlement = Settlement.query.get_or_404(settlement_id)
 
-    # Sprawdź, czy zalogowany użytkownik jest stroną w tej transakcji
+    # Sprawdzamy, czy zalogowany użytkownik jest stroną w tej transakcji
     is_user_debtor = (settlement.debtor_user_id == current_user.id)
     is_user_creditor = (settlement.creditor_user_id == current_user.id)
 
-    # Sprawdź, czy zalogowany użytkownik jest właścicielem znajomego będącego stroną
+    # Sprawdzamy, czy zalogowany użytkownik jest właścicielem znajomego będącego stroną
     is_friend_debtor_owned = (settlement.debtor_friend_id and settlement.debtor_friend.user_id == current_user.id)
     is_friend_creditor_owned = (settlement.creditor_friend_id and settlement.creditor_friend.user_id == current_user.id)
 
@@ -315,7 +313,7 @@ def settle_single_transaction(settlement_id):
         db.session.commit()
         flash('Rozliczenie zostało pomyślnie oznaczone jako opłacone.', 'success')
 
-        # Po uregulowaniu pojedynczego rozliczenia, sprawdź status całej listy
+        # Po uregulowaniu pojedynczego rozliczenia, sprawdzamy status całej listy
         check_and_update_list_settlement_status(settlement.shopping_list_id)
 
     return redirect(url_for('settlements.settlements_dashboard'))
@@ -347,17 +345,16 @@ def settlement_history():
 
     return render_template('settlements/history.html', all_settlements=all_settlements)
 
-# Export transakcji
 @bp.route('/transakcje.csv')
 def eksportuj_transakcje_csv():
     """
     Generuje plik CSV ze wszystkimi rekordami Settlement
     """
-    # Nagłówki kolumn
+
     naglowki = ['ID', 'ID listy', 'ID dluznika', 'ID wierzyciela',
                 'Kwota', 'Utworzono', 'Rozliczono']
 
-    # Przygotowanie bufora CSV
+
     bufor = StringIO()
     writer = csv.writer(bufor, delimiter=';')
     writer.writerow(naglowki)

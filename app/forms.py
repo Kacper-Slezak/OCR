@@ -11,7 +11,6 @@ class RegistrationForm(FlaskForm):
     confirm_password = PasswordField('Potwierdź hasło:', validators=[DataRequired(), EqualTo('password', message='Hasło musi być takie same!')])
     submit = SubmitField('Zarejestruj się')
 
-    # Metody walidujące MUSZĄ być wewnątrz klasy formularza
     def validate_username(self, username):
         user = User.query.filter_by(username=username.data).first()
         if user:
