@@ -62,21 +62,15 @@ def create_app():
     login_manager.login_message_category = 'info'
     login_manager.login_message = 'Wymagane logowanie, aby korzystać ze strony.'
 
-        # только в основном (не-первом «загружающем») процессе
     if os.environ.get('WERKZEUG_RUN_MAIN') == 'true' or not app.debug:
-        # регистрируем и стартуем APScheduler здесь
         from app.services.notifications_services import wyslij_przypomnienia_dluznikom
 
         def job_wrapper():
-            print(">>> [job_wrapper] start", flush=True)
             with app.app_context():
                 try:
-                    print(">>> [job_wrapper] calling notify", flush=True)
                     wyslij_przypomnienia_dluznikom()
-                    print(">>> [job_wrapper] returned notify", flush=True)
                 except Exception as e:
-                    print("!!! [job_wrapper] exception:", e, flush=True)
-            print(">>> [job_wrapper] end", flush=True)
+                    print(e, flush=True)
 
         scheduler.add_job(
             func=job_wrapper,
@@ -87,7 +81,6 @@ def create_app():
             replace_existing=True,
             misfire_grace_time=30
         )
-        print(">>> APScheduler jobs:", scheduler.get_jobs(), flush=True)
         scheduler.start()
         atexit.register(lambda: scheduler.shutdown(wait=False))
 
@@ -111,8 +104,6 @@ def create_app():
     # Rejestracja blueprintu powiadomień
     app.register_blueprint(notifications_bp)
 
-    # Harmonogram wysyłania wiadomości przypomniających
-
     # Funkcja user_loader dla Flask-Login
     @login_manager.user_loader
     def load_user(user_id):
@@ -122,7 +113,5 @@ def create_app():
     with app.app_context():
         db.create_all()
         pass
-
-    atexit.register(lambda: scheduler.shutdown(wait=False))
 
     return app
