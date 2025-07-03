@@ -10,6 +10,10 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import os
 import atexit
 from datetime import datetime
+import logging
+
+logging.basicConfig()
+logging.getLogger('apscheduler').setLevel(logging.DEBUG)
 
 # Utwórz instancje rozszerzeń poza funkcją, aby były dostępne globalnie
 db = SQLAlchemy()
@@ -58,6 +62,29 @@ def create_app():
     login_manager.login_message_category = 'info'
     login_manager.login_message = 'Wymagane logowanie, aby korzystać ze strony.'
 
+    if os.environ.get('WERKZEUG_RUN_MAIN') == 'true' or not app.debug:
+        from app.services.notifications_services import wyslij_przypomnienia_dluznikom
+
+        def job_wrapper():
+            with app.app_context():
+                try:
+                    wyslij_przypomnienia_dluznikom()
+                except Exception as e:
+                    print(e, flush=True)
+
+        scheduler.add_job(
+            func=job_wrapper,
+            trigger='interval',
+            seconds=10,
+            next_run_time=datetime.utcnow(),
+            id='przypomnienia_dluznikom',
+            replace_existing=True,
+            misfire_grace_time=30
+        )
+        scheduler.start()
+        atexit.register(lambda: scheduler.shutdown(wait=False))
+
+
     # Importowanie blueprints
     from .routes import auth
 
@@ -77,18 +104,6 @@ def create_app():
     # Rejestracja blueprintu powiadomień
     app.register_blueprint(notifications_bp)
 
-    # Harmonogram wysyłania wiadomości przypomniających
-    from app.services.notifications_services import wyslij_przypomnienia_dluznikom
-    scheduler.add_job(
-        func=wyslij_przypomnienia_dluznikom,
-        trigger='interval',
-        days=7,
-        next_run_time=datetime.utcnow(),
-        id='przypomnienia_dluznikom'
-    )
-    scheduler.start()
-
-
     # Funkcja user_loader dla Flask-Login
     @login_manager.user_loader
     def load_user(user_id):
@@ -98,7 +113,5 @@ def create_app():
     with app.app_context():
         db.create_all()
         pass
-
-    atexit.register(lambda: scheduler.shutdown(wait=False))
 
     return app
