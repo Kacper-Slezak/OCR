@@ -1,17 +1,15 @@
-# app/routes/receipt.py
-
 from flask import render_template, Blueprint, redirect, url_for, flash, request, current_app as app, \
     make_response
 from flask_login import login_required, current_user
 from app import db
-from app.models import ShoppingList, Product, Receipt, Friend  # Ensure User is imported for participants
-from app.services.ocr_services import process_receipt_image  # Your existing OCR service
-from app.services.merging_services import match_ocr_to_shopping_list  # Renamed from ocr_matching_service
+from app.models import ShoppingList, Product, Receipt, Friend
+from app.services.ocr_services import process_receipt_image
+from app.services.merging_services import match_ocr_to_shopping_list
 from decimal import Decimal, InvalidOperation
 import os
 from werkzeug.utils import secure_filename
 import io
-import csv  # For CSV export
+import csv
 
 receipt_bp = Blueprint('receipt', __name__)
 
@@ -42,7 +40,6 @@ def safe_assign_friends_to_product(product, friend_ids, current_user_id):
             continue
 
 
-# --- Trasy dotyczące List Zakupów ---
 
 @receipt_bp.route('/shopping-list/edit', defaults={'list_id': None}, methods=['GET', 'POST'])
 @receipt_bp.route('/shopping-list/edit/<int:list_id>', methods=['GET', 'POST'])
@@ -56,7 +53,6 @@ def edit_shopping_list(list_id):
     shopping_list = None
     if list_id:
         shopping_list = ShoppingList.query.get_or_404(list_id)
-        # Sprawdź, czy użytkownik jest twórcą lub uczestnikiem
         if shopping_list.created_by != current_user.id and current_user not in shopping_list.participants.all():
             flash('Nie masz uprawnień do edycji tej listy zakupów.', 'danger')
             return redirect(url_for('main.dashboard'))
@@ -75,7 +71,7 @@ def edit_shopping_list(list_id):
             db.session.add(shopping_list)
             db.session.flush()  # Potrzebne do uzyskania ID dla nowej listy przed dodaniem produktów
 
-        # Obsługa produktów z formularza
+
         products_data = []
         i = 0
         while f'products[{i}][name]' in request.form:
@@ -83,7 +79,7 @@ def edit_shopping_list(list_id):
             product_price_str = request.form.get(f'products[{i}][price]', '').strip()
             assigned_friends_ids = request.form.getlist(f'products[{i}][assigned_friends][]')
 
-            if product_name:  # Przetwarzaj tylko produkty z nazwą
+            if product_name:
                 product_price = Decimal('0.00')
                 if product_price_str:
                     try:
@@ -99,16 +95,16 @@ def edit_shopping_list(list_id):
                 })
             i += 1
 
-        # Usuń istniejące produkty dla tej listy przed dodaniem nowych z formularza
+        # Usuwamy istniejące produkty dla tej listy przed dodaniem nowych z formularza
         if shopping_list.id:
             try:
                 products_to_delete = Product.query.filter_by(shopping_list_id=shopping_list.id).all()
                 for product in products_to_delete:
                     product.assigned_friends_for_product.clear()
 
-                db.session.flush()  # Zatwierdź czyszczenie relacji
+                db.session.flush()  # Zatwierdzamy czyszczenie relacji
                 Product.query.filter_by(shopping_list_id=shopping_list.id).delete()
-                db.session.flush()  # Zatwierdź usunięcie produktów
+                db.session.flush()
 
             except Exception as e:
                 print(f"Błąd podczas usuwania produktów: {e}")
@@ -116,7 +112,7 @@ def edit_shopping_list(list_id):
                 flash(f'Błąd podczas aktualizacji listy: {e}', 'danger')
                 return redirect(request.url)
 
-        # Dodaj nowe produkty
+
         for p_data in products_data:
             new_product = Product(
                 name=p_data['name'],
@@ -126,7 +122,7 @@ def edit_shopping_list(list_id):
                 is_purchased=False
             )
             db.session.add(new_product)
-            db.session.flush()  # Flush, aby uzyskać ID produktu przed przypisaniem znajomych
+            db.session.flush()  # Potrzebne do uzyskania ID produktu przed przypisaniem znajomych
 
             safe_assign_friends_to_product(new_product, p_data['assigned_friends_ids'], current_user.id)
 
@@ -139,15 +135,15 @@ def edit_shopping_list(list_id):
             flash(f'Błąd podczas zapisywania listy zakupów: {e}', 'danger')
             return redirect(request.url)
 
-    # Żądanie GET: Wyświetl formularz
+
     products_data = []
     if shopping_list:
         for product in shopping_list.products:
             products_data.append({
                 'name': product.name,
-                'price': product.price,  # Już Decimal
+                'price': product.price,
                 'assigned_friends': [f.id for f in product.assigned_friends_for_product],
-                'paid_by': product.paid_by,  # Uwzględnij paid_by
+                'paid_by': product.paid_by,
                 'db_id': product.id
             })
 
@@ -155,7 +151,7 @@ def edit_shopping_list(list_id):
     all_friends_for_js = [{'id': friend.id, 'name': friend.name} for friend in all_friends_for_user]
 
     return render_template(
-        'recipt/edit_shopping_list.html',  # Zmieniona nazwa szablonu
+        'recipt/edit_shopping_list.html',
         shopping_list=shopping_list,
         products_data=products_data,
         all_friends=all_friends_for_js
@@ -184,7 +180,6 @@ def delete_shopping_list(list_id):
     return redirect(url_for('main.dashboard'))
 
 
-# --- Trasy dotyczące Paragonów i OCR ---
 
 def allowed_file(filename):
     """Sprawdza, czy rozszerzenie pliku jest dozwolone."""
@@ -199,7 +194,7 @@ def upload_receipt_for_list(list_id):
     Wgrywa obraz paragonu dla konkretnej listy zakupów i inicjuje proces OCR.
     """
     shopping_list = ShoppingList.query.get_or_404(list_id)
-    if shopping_list.created_by != current_user.id:  # Tylko twórca może wgrywać paragony dla tej listy
+    if shopping_list.created_by != current_user.id:
         flash('Nie masz uprawnień do dodawania paragonów do tej listy.', 'danger')
         return redirect(url_for('main.dashboard'))
 
@@ -222,7 +217,7 @@ def upload_receipt_for_list(list_id):
         new_receipt = Receipt(
             user_id=current_user.id,
             file_path=file_path,
-            shopping_list_id=list_id,  # Powiąż paragon z listą zakupów!
+            shopping_list_id=list_id,  # Powiązujemy paragon z listą zakupów
             status='Uploaded'
         )
         db.session.add(new_receipt)
@@ -230,11 +225,8 @@ def upload_receipt_for_list(list_id):
 
         flash('Paragon został wgrany i jest przetwarzany.', 'info')
 
-        # Uruchom OCR w tle (lub przekieruj na stronę oczekiwania)
-        # Na razie wywołujemy bezpośrednio. W prawdziwej aplikacji użyj Celery/RQ.
         process_receipt_image(new_receipt.id, file_path)
 
-        # Po przetworzeniu, przekieruj użytkownika na stronę przeglądu OCR
         return redirect(url_for('receipt.review_ocr_results', receipt_id=new_receipt.id))
     else:
         flash('Dozwolone typy plików to: png, jpg, jpeg, gif.', 'error')
@@ -270,7 +262,7 @@ def review_ocr_results(receipt_id):
             name = request.form.get(f'ocr_items[{i}][name]', '').strip()
             total_price_str = request.form.get(f'ocr_items[{i}][total_price]', '').strip()
 
-            if name:  # Dodawaj tylko elementy z nazwą
+            if name:
                 price_decimal = Decimal('0.00')
                 if total_price_str:
                     try:
@@ -280,21 +272,21 @@ def review_ocr_results(receipt_id):
                         price_decimal = Decimal('0.00')
 
                 corrected_ocr_items.append(
-                    {'name': name, 'total_price': str(price_decimal)})  # Zapisz jako string dla JSON
+                    {'name': name, 'total_price': str(price_decimal)})
             i += 1
 
-        # Zapisz skorygowane dane z powrotem do receipt.processed_data
+        # Zapisujemy skorygowane dane z powrotem do receipt.processed_data
         parsed_ocr_data['items'] = corrected_ocr_items
         receipt.set_processed_data(parsed_ocr_data)
         db.session.commit()
         flash('Korekty OCR zapisane.', 'success')
 
-        # Przejdź do scalania z listą zakupów
+        # Przechodzimy do scalania z listą zakupów
         return redirect(url_for('receipt.merge_ocr_with_list', receipt_id=receipt.id))
 
-    # Żądanie GET: Wyświetl formularz korekty
+
     return render_template(
-        'ocr/review_ocr_results.html',  # Nowy szablon
+        'ocr/review_ocr_results.html',
         receipt=receipt,
         ocr_items=parsed_ocr_data.get('items', [])
     )
@@ -309,7 +301,6 @@ def merge_ocr_with_list(receipt_id):
     """
     print(f"DEBUG: Rozpoczynanie scalania dla paragonu ID: {receipt_id}")
 
-    # Sprawdzenia podstawowe
     receipt = Receipt.query.get_or_404(receipt_id)
     if receipt.user_id != current_user.id:
         flash('Nie masz uprawnień do scalania danych z tego paragonu.', 'danger')
@@ -324,7 +315,6 @@ def merge_ocr_with_list(receipt_id):
         flash('Nie masz uprawnień do modyfikowania tej listy zakupów.', 'danger')
         return redirect(url_for('main.dashboard'))
 
-    # Sprawdzenie danych OCR
     parsed_ocr_data = receipt.get_processed_data()
     if not parsed_ocr_data or "items" not in parsed_ocr_data or not parsed_ocr_data["items"]:
         flash('Brak przetworzonych danych OCR do scalenia.', 'warning')
@@ -332,7 +322,6 @@ def merge_ocr_with_list(receipt_id):
 
     print(f"DEBUG: Pobrano {len(parsed_ocr_data['items'])} elementów z OCR")
 
-    # Przygotowanie danych istniejących produktów
     current_shopping_list_products = []
     for product in shopping_list.products:
         current_shopping_list_products.append({
@@ -346,7 +335,7 @@ def merge_ocr_with_list(receipt_id):
     print(f"DEBUG: Pobrano {len(current_shopping_list_products)} istniejących produktów")
 
     try:
-        # Wywołanie algorytmu scalania
+        # Wywołujemy algorytm scalania
         merged_products_data = match_ocr_to_shopping_list(
             shopping_list_items=current_shopping_list_products,
             parsed_ocr_items=parsed_ocr_data["items"]
@@ -393,7 +382,6 @@ def _safely_clear_shopping_list_products(shopping_list_id):
     try:
         print(f"DEBUG: Rozpoczynanie usuwania produktów dla listy {shopping_list_id}")
 
-        # Pobierz wszystkie produkty
         products_to_delete = Product.query.filter_by(shopping_list_id=shopping_list_id).all()
         print(f"DEBUG: Znaleziono {len(products_to_delete)} produktów do usunięcia")
 
@@ -401,14 +389,14 @@ def _safely_clear_shopping_list_products(shopping_list_id):
             print("DEBUG: Brak produktów do usunięcia")
             return True
 
-        # Wyczyść relacje many-to-many dla każdego produktu
+        # Czyścimy relacje many-to-many dla każdego produktu
         for product in products_to_delete:
             try:
-                # Sprawdź czy produkt ma relacje
+                # Sprawdzamy czy produkt ma relacje
                 friends_count = len(product.assigned_friends_for_product)
                 print(f"DEBUG: Produkt {product.id} ma {friends_count} przypisanych znajomych")
 
-                # Wyczyść relacje
+                # Czyścimy relacje
                 product.assigned_friends_for_product.clear()
 
             except Exception as e:
@@ -416,15 +404,12 @@ def _safely_clear_shopping_list_products(shopping_list_id):
                 db.session.rollback()
                 return False
 
-        # Flush, aby zastosować zmiany w relacjach
         db.session.flush()
         print("DEBUG: Relacje wyczyszczone")
 
-        # Usuń produkty
         deleted_count = Product.query.filter_by(shopping_list_id=shopping_list_id).delete()
         print(f"DEBUG: Usunięto {deleted_count} produktów")
 
-        # Commit usunięć
         db.session.commit()
         print("DEBUG: Usuwanie produktów zakończone sukcesem")
         return True
@@ -446,7 +431,6 @@ def _safely_add_merged_products(merged_products_data, shopping_list_id, current_
         for i, item_data in enumerate(merged_products_data):
             print(f"DEBUG: Przetwarzanie produktu {i + 1}: {item_data}")
 
-            # Walidacja danych produktu
             if not isinstance(item_data, dict):
                 print(f"ERROR: Produkt {i + 1} nie jest słownikiem: {type(item_data)}")
                 continue
@@ -455,10 +439,8 @@ def _safely_add_merged_products(merged_products_data, shopping_list_id, current_
                 print(f"ERROR: Produkt {i + 1} nie ma nazwy")
                 continue
 
-            # Konwersja ceny
             price_decimal = _convert_price_to_decimal(item_data.get('price', '0.00'))
 
-            # Tworzenie produktu
             new_product = Product(
                 name=str(item_data['name']).strip(),
                 price=price_decimal,
@@ -468,18 +450,16 @@ def _safely_add_merged_products(merged_products_data, shopping_list_id, current_
             )
 
             db.session.add(new_product)
-            db.session.flush()  # Uzyskaj ID produktu
+            db.session.flush()
 
             print(f"DEBUG: Utworzono produkt {new_product.id}: {new_product.name}")
 
-            # Przypisywanie znajomych
             assigned_friends = item_data.get('assigned_friends', [])
             if assigned_friends:
                 success = _assign_friends_to_product(new_product, assigned_friends, current_user_id)
                 if not success:
                     print(f"WARNING: Błąd przypisywania znajomych do produktu {new_product.id}")
 
-        # Commit wszystkich zmian
         db.session.commit()
         print("DEBUG: Dodawanie produktów zakończone sukcesem")
         return True
@@ -501,7 +481,6 @@ def _convert_price_to_decimal(price_value):
         return Decimal('0.00')
 
     try:
-        # Konwertuj na string i zamień przecinek na kropkę
         price_str = str(price_value).replace(',', '.').strip()
         if not price_str:
             return Decimal('0.00')
@@ -538,7 +517,7 @@ def _assign_friends_to_product(product, friend_ids, current_user_id):
             ).first()
 
             if friend:
-                # Sprawdź czy znajomy nie jest już przypisany
+                # Sprawdzamy czy znajomy nie jest już przypisany
                 if friend not in product.assigned_friends_for_product:
                     product.assigned_friends_for_product.append(friend)
                     print(f"DEBUG: Przypisano znajomego {friend_id} do produktu {product.id}")
@@ -601,12 +580,10 @@ def export_receipt_csv(receipt_id):
     output = io.StringIO()
     writer = csv.writer(output)
 
-    # Nagłówki CSV
     writer.writerow(["Nazwa Produktu", "Cena Całkowita", "Ilość", "Cena Jednostkowa", "Rabat"])
 
-    # Wiersze CSV
     for item in parsed_data.get('items', []):
-        name = item.get('name', '').replace('"', '""')  # Obsługa cudzysłowów w nazwach
+        name = item.get('name', '').replace('"', '""')
         total_price = item.get('total_price', '0.00')
         quantity = item.get('quantity', '')
         unit_price = item.get('unit_price', '')
