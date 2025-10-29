@@ -27,21 +27,15 @@ def create_app():
     # Ładowanie zmiennych środowiskowych z .env
     load_dotenv()
     # Definiowanie ścieżek
-    # Sciezka do katalogu, w którym znajduje się ten plik (__init__.py), czyli 'app/'
     current_dir = os.path.dirname(__file__)
-    # Sciezka do katalogu nadrzędnego (czyli katalogu projektu 'OCR')
-    # To jest ten katalog, w którym znajduje się 'templates/' i 'app/'
     project_root_dir = os.path.abspath(os.path.join(current_dir, '..'))
 
-    # Inicjalizacja aplikacji Flask, wskazując DOKŁADNĄ ścieżkę do folderu templates
+    # Inicjalizacja aplikacji Flask
     app = Flask(__name__,
                 instance_relative_config=True,
-                template_folder=os.path.join(project_root_dir, 'templates') # <--- DODAJ TĘ LINIĘ
+                template_folder=os.path.join(project_root_dir, 'templates')
                )
     app.config.from_object('config.Config')
-
-    # Konfiguracja bazy danych
-    app.config['SQLALCHEMY_DATABASE_URL'] = os.getenv('DATABASE_URL')
 
     # Konfiguracja serwera SMTP dla Flask-Mail
     app.config['MAIL_SERVER']   = os.getenv('EMAIL_HOST')
@@ -52,66 +46,23 @@ def create_app():
 
     db.init_app(app)
     login_manager.init_app(app)
-    migrate = Migrate(app, db) # Tutaj możesz też przekazać app do Migrate od razu
+    migrate = Migrate(app, db) 
 
     mail.init_app(app)
 
-
     # Ustawianie widoku dla niezalogowanych użytkowników
-    login_manager.login_view = 'auth.login' # Załóżmy, że masz Blueprint 'auth' z logowaniem
+    login_manager.login_view = 'auth.login'
     login_manager.login_message_category = 'info'
     login_manager.login_message = 'Wymagane logowanie, aby korzystać ze strony.'
 
-    if os.environ.get('WERKZEUG_RUN_MAIN') == 'true' or not app.debug:
-        from app.services.notifications_services import wyslij_przypomnienia_dluznikom
-
-        def job_wrapper():
-            with app.app_context():
-                try:
-                    wyslij_przypomnienia_dluznikom()
-                except Exception as e:
-                    print(e, flush=True)
-
-        scheduler.add_job(
-            func=job_wrapper,
-            trigger='interval',
-            seconds=10,
-            next_run_time=datetime.utcnow(),
-            id='przypomnienia_dluznikom',
-            replace_existing=True,
-            misfire_grace_time=30
-        )
-        scheduler.start()
-        atexit.register(lambda: scheduler.shutdown(wait=False))
-
+    # --- STARY KOD SCHEDULERA ZOSTAŁ STĄD USUNIĘTY ---
 
     # Importowanie blueprints
     from .routes import auth
-
-
     from .routes.main import bp as main_bp
     from .routes.receipt import receipt_bp
     from .routes import settlements
     from app.routes.notifications import notifications_bp
     
     # Rejestrowanie blueprints w aplikacji
-    app.register_blueprint(auth.bp)
-    app.register_blueprint(main_bp)
-
-    app.register_blueprint(receipt_bp)
-    app.register_blueprint(settlements.bp)  #
-
-    # Rejestracja blueprintu powiadomień
-    app.register_blueprint(notifications_bp)
-
-    # Funkcja user_loader dla Flask-Login
-    @login_manager.user_loader
-    def load_user(user_id):
-        from app.models import User
-        return User.query.get(int(user_id))
-
-    with app.app_context():
-        db.create_all()
-        pass
-
-    return app
+    app

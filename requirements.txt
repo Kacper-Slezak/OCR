@@ -19,3 +19,5 @@ numpy==1.26.4
 py_email_validation
 email_validator
 Levenshtein
+gunicorn==21.2.0
+psycopg2-binary==2.9.6
