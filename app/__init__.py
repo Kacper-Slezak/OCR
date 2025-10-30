@@ -23,6 +23,26 @@ login_manager = LoginManager()
 mail = Mail()
 scheduler = BackgroundScheduler()
 
+# <--- POPRAWKA: Dodano brakującą funkcję start_scheduler
+def start_scheduler(app):
+    """Uruchamia zadania w tle (wymagane przez gunicorn.conf.py)."""
+    
+    # Importujemy zadanie, które ma być uruchamiane
+    from app.services.notifications_services import wyslij_przypomnienia_dluznikom
+    
+    if not scheduler.running:
+        # Używamy app.app_context() w zadaniu, aby miało dostęp do konfiguracji i DB
+        @scheduler.scheduled_job('interval', hours=24) # Uruchom np. raz na 24 godziny
+        def scheduled_task_wrapper():
+            with app.app_context():
+                print("Scheduler: Uruchamiam zaplanowane zadanie (wyslij_przypomnienia_dluznikom)...")
+                wyslij_przypomnienia_dluznikom()
+        
+        scheduler.start()
+        print("Scheduler został pomyślnie uruchomiony.")
+        # Zarejestruj zamknięcie schedulera przy wyjściu z aplikacji
+        atexit.register(lambda: scheduler.shutdown())
+
 def create_app():
     # Ładowanie zmiennych środowiskowych z .env
     load_dotenv()
@@ -64,5 +84,12 @@ def create_app():
     from .routes import settlements
     from app.routes.notifications import notifications_bp
     
-    # Rejestrowanie blueprints w aplikacji
-    app
+    # <--- POPRAWKA: Rejestrowanie blueprints w aplikacji (brakowało tego)
+    app.register_blueprint(auth.bp)
+    app.register_blueprint(main_bp)
+    app.register_blueprint(receipt_bp)
+    app.register_blueprint(settlements.bp)
+    app.register_blueprint(notifications_bp)
+
+    # <--- POPRAWKA: Funkcja musi zwracać instancję aplikacji
+    return app
