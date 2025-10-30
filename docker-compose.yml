@@ -2,7 +2,11 @@ services:
   web:
     build: .
     command: >
-      sh -c "python -c 'from app import create_app, db; app = create_app(); app.app_context().push(); db.create_all()' &&
+      sh -c "echo 'Czekam 10 sekund na uruchomienie bazy danych...' &&
+             sleep 10 &&
+             echo 'Uruchamiam db.create_all()...' &&
+             python -c 'from app import create_app, db; app = create_app(); app.app_context().push(); db.create_all()' &&
+             echo 'Uruchamiam Gunicorn...' &&
              gunicorn --config gunicorn.conf.py run:app"
     ports:
       - "5000:5000"
